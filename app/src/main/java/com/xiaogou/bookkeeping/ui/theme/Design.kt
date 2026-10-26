@@ -55,7 +55,8 @@ object WalkDimens {
     val iconBoxLarge = 50.dp
     val assetRowHeight = 62.dp
     val typeRowInset = 66.dp
-    val searchBoxHeight = 40.dp
+    // 搜索框高：Material 输入框默认 56dp，40dp 会把文字压扁，看着又窄又挤。
+    val searchBoxHeight = 56.dp
     val settingsDividerInset = 50.dp
     val keyboardRowHeight = 58.dp
     val keyboardSideColumnWidth = 64.dp

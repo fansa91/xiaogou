@@ -73,9 +73,11 @@ fun SearchScreen(factory: AppViewModelFactory) {
                         unfocusedIndicatorColor = Color.Transparent,
                     ),
                 )
+                // 按钮内边距收窄：默认左右各 24dp 会吃掉输入框宽度。
                 Button(
                     onClick = { keyboard?.hide() },
                     modifier = Modifier.height(WalkDimens.searchBoxHeight),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
                 ) { Text("搜索") }
             }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 12.dp)) {

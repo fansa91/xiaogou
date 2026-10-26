@@ -325,11 +325,13 @@ fun RecordAddScreen(factory: AppViewModelFactory, onDone: () -> Unit, onBack: ()
             if (selectedType != null && selectedType.parentId != -1L) {
                 Text("已选：${types.firstOrNull { it.id == selectedType.parentId }?.name ?: ""} · ${selectedType.name ?: ""}")
             }
+            // 分类网格占满剩余高度：内容不够高时键盘和底部按钮贴底，
+            // 不在“返回”下面留一截白；内容超高时网格内部滚动，不裁底部。
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.weight(1f),
             ) {
                 items(topTypes) { t ->
                     FilterChip(
