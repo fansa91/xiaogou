@@ -56,6 +56,26 @@ class Settings(private val prefs: SharedPreferences) {
     fun isNight(systemDark: Boolean): Boolean =
         nightMode && (!nightBySystem || systemDark)
 
+    /** 金额前显示货币符号（源码 setting_currency 口径）。 */
+    var currencySymbol: Boolean
+        get() = prefs.getBoolean("key_currency_symbol", false)
+        set(v) { prefs.edit().putBoolean("key_currency_symbol", v).apply() }
+
+    /** 每月起始日（1–28，源码 setting_month_begin 口径）。 */
+    var monthBeginDay: Int
+        get() = prefs.getInt("key_month_begin_day", 1).coerceIn(1, 28)
+        set(v) { prefs.edit().putInt("key_month_begin_day", v.coerceIn(1, 28)).apply() }
+
+    /** 资产页显示饼图（源码 setting_assets_pie 口径）。 */
+    var assetsPie: Boolean
+        get() = prefs.getBoolean("key_assets_pie", true)
+        set(v) { prefs.edit().putBoolean("key_assets_pie", v).apply() }
+
+    /** 统计页显示饼图（源码 setting_pie 口径）。 */
+    var statisticsPie: Boolean
+        get() = prefs.getBoolean("key_statistics_pie", true)
+        set(v) { prefs.edit().putBoolean("key_statistics_pie", v).apply() }
+
     var lockEnabled: Boolean
         get() = prefs.getBoolean("key_app_lock_enabled", false)
         set(v) { prefs.edit().putBoolean("key_app_lock_enabled", v).apply() }

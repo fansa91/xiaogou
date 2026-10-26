@@ -281,6 +281,7 @@ fun StatisticsAdvancedScreen(
     onSubtype: (Long) -> Unit,
     onAllTypes: () -> Unit = {},
     onHist: () -> Unit = {},
+    showPie: Boolean = true,
 ) {
     val vm: StatisticsViewModel = viewModel(factory = factory)
     val homeVm: HomeViewModel = viewModel(factory = factory)
@@ -290,6 +291,7 @@ fun StatisticsAdvancedScreen(
     var histIncome by remember { mutableStateOf(false) }
     var curveIncome by remember { mutableStateOf(false) }
     var showRankSheet by remember { mutableStateOf(false) }
+    var showYearDialog by remember { mutableStateOf(false) }
     // 年月选择器：默认当月，可前后翻月；饼图按所选月份算，不再只算当月。
     val nowCal = java.util.Calendar.getInstance()
     var selYear by remember { mutableStateOf(nowCal.get(java.util.Calendar.YEAR)) }
@@ -332,19 +334,21 @@ fun StatisticsAdvancedScreen(
                 com.xiaogou.bookkeeping.ui.theme.StatisticsBlockHeader("分类占比")
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = { shiftMonth(-1) }) { Text("‹ 上月") }
-                    Text("${selYear}年${selMonth + 1}月")
+                    TextButton(onClick = { showYearDialog = true }) { Text("${selYear}年${selMonth + 1}月 ▾") }
                     TextButton(onClick = { shiftMonth(1) }) { Text("下月 ›") }
                 }
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-                    if (monthSums.isNotEmpty()) {
-                        PieChart(values = monthSums, colors = pieColors)
-                        Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
-                            monthSums.forEachIndexed { i, (name, v) ->
-                                Text("$name ${v * 100 / monthTotal}% · ${centsToYuan(v)}")
+                if (showPie) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                        if (monthSums.isNotEmpty()) {
+                            PieChart(values = monthSums, colors = pieColors)
+                            Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
+                                monthSums.forEachIndexed { i, (name, v) ->
+                                    Text("$name ${v * 100 / monthTotal}% · ${centsToYuan(v)}")
+                                }
                             }
+                        } else {
+                            Text("所选月份暂无记录")
                         }
-                    } else {
-                        Text("所选月份暂无记录")
                     }
                 }
                 monthSums.forEach { (name, v) ->
@@ -403,6 +407,30 @@ fun StatisticsAdvancedScreen(
                 Button(onClick = onAllTypes, modifier = Modifier.fillMaxWidth()) { Text("全部类型（按支出 / 收入分组）") }
             }
         }
+    }
+    if (showYearDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showYearDialog = false },
+            title = { Text("选择年份") },
+            text = {
+                Column {
+                    val years = (records.mapNotNull {
+                        java.util.Calendar.getInstance().apply { timeInMillis = it.time ?: 0 }.get(java.util.Calendar.YEAR)
+                    } + nowCal.get(java.util.Calendar.YEAR)).distinct().sorted()
+                    years.forEach { y ->
+                        Text(
+                            "$y 年",
+                            modifier = Modifier.fillMaxWidth().clickable { selYear = y; showYearDialog = false }.padding(vertical = 12.dp),
+                        )
+                    }
+                    if (years.isEmpty()) Text("${nowCal.get(java.util.Calendar.YEAR)} 年")
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showYearDialog = false }) { Text("取消") }
+            },
+        )
     }
     if (showRankSheet) {
         androidx.compose.material3.ModalBottomSheet(onDismissRequest = { showRankSheet = false }) {
@@ -487,8 +515,41 @@ fun SubtypeScreen(factory: AppViewModelFactory, parentId: Long) {
     var name by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var added by remember { mutableStateOf(false) }
+    val sums by homeVm.sums.collectAsState()
+    val subtypeIds = types.filter { it.parentId == parentId }.map { it.id }.toSet()
+    val subtypeSums = sums.filter { it.recordTypeId in subtypeIds }.map { s ->
+        (types.firstOrNull { it.id == s.recordTypeId }?.name ?: "") to s.total
+    }.filter { it.second > 0 }
+    val subtypeTotal = subtypeSums.sumOf { it.second }
     Scaffold(topBar = { TopAppBar(title = { Text("${parent?.name ?: ""} · 子类型") }) }) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                // 子类型饼图（statistics_subtype_pie 口径）：120dp 环形饼 + 右下合计行。
+                if (subtypeSums.isNotEmpty()) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        PieChart(
+                            values = subtypeSums,
+                            colors = listOf(
+                                androidx.compose.ui.graphics.Color(0xFFFEAD23),
+                                androidx.compose.ui.graphics.Color(0xFF0F9D58),
+                                androidx.compose.ui.graphics.Color(0xFFFE2542),
+                                androidx.compose.ui.graphics.Color(0xFF2581FE),
+                                androidx.compose.ui.graphics.Color(0xFF65C3AC),
+                            ),
+                        )
+                        Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
+                            subtypeSums.forEach { (n, v) ->
+                                Text("$n ${v * 100 / subtypeTotal.coerceAtLeast(1)}% · ${centsToYuan(v)}")
+                            }
+                        }
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Text("合计 ${centsToYuan(subtypeTotal)}")
+                    }
+                } else {
+                    Text("本月该分类下暂无子类型记录")
+                }
+            }
             item {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("子类型名") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 error?.let { Text(it) }
@@ -527,9 +588,20 @@ fun SettingsScreen(
     onReimburse: () -> Unit,
     onStatistics: () -> Unit,
     onLockSetup: () -> Unit,
+    onTypes: () -> Unit = {},
+    currencySymbol: Boolean = false,
+    onCurrencyChange: (Boolean) -> Unit = {},
+    monthBeginDay: Int = 1,
+    onMonthBeginChange: (Int) -> Unit = {},
+    assetsPie: Boolean = true,
+    onAssetsPieChange: (Boolean) -> Unit = {},
+    statisticsPie: Boolean = true,
+    onStatisticsPieChange: (Boolean) -> Unit = {},
 ) {
     var lockOn by remember { mutableStateOf(settings.lockEnabled) }
     var showNightDialog by remember { mutableStateOf(false) }
+    var showMonthDialog by remember { mutableStateOf(false) }
+    var monthInput by remember { mutableStateOf(monthBeginDay.toString()) }
     val themeLabel = com.xiaogou.bookkeeping.ui.theme.WalkThemeId.fromKey(themeKey).label
     Scaffold(topBar = { TopAppBar(title = { Text("设置") }) }) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
@@ -554,6 +626,36 @@ fun SettingsScreen(
                 SettingsRow(icon = { Text("周") }, title = "周期记账", subtitle = "每天 / 每周 / 每月 / 每年自动记", onClick = onRecurring)
                 SettingsRow(icon = { Text("报") }, title = "报销", subtitle = "待报销与已报销", onClick = onReimburse)
                 SettingsRow(icon = { Text("统") }, title = "统计", subtitle = "分类占比、柱状、曲线", onClick = onStatistics)
+                SettingsRow(icon = { Text("类") }, title = "分类管理", subtitle = "新增、改名、开关分类", onClick = onTypes)
+            }
+            item {
+                com.xiaogou.bookkeeping.ui.theme.SettingsSwitchRow(
+                    icon = { Text("¥") },
+                    title = "货币符号",
+                    subtitle = "金额前显示 ¥",
+                    checked = currencySymbol,
+                    onCheckedChange = onCurrencyChange,
+                )
+                SettingsRow(
+                    icon = { Text("月") },
+                    title = "每月起始日",
+                    subtitle = "每月 $monthBeginDay 日起算（1–28）",
+                    onClick = { monthInput = monthBeginDay.toString(); showMonthDialog = true },
+                )
+                com.xiaogou.bookkeeping.ui.theme.SettingsSwitchRow(
+                    icon = { Text("饼") },
+                    title = "资产饼图",
+                    subtitle = "资产页显示饼图",
+                    checked = assetsPie,
+                    onCheckedChange = onAssetsPieChange,
+                )
+                com.xiaogou.bookkeeping.ui.theme.SettingsSwitchRow(
+                    icon = { Text("图") },
+                    title = "统计饼图",
+                    subtitle = "统计页显示饼图",
+                    checked = statisticsPie,
+                    onCheckedChange = onStatisticsPieChange,
+                )
             }
             item {
                 com.xiaogou.bookkeeping.ui.theme.SettingsSwitchRow(
@@ -608,6 +710,36 @@ fun SettingsScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showNightDialog = false }) { Text("取消") }
+            },
+        )
+    }
+    if (showMonthDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showMonthDialog = false },
+            title = { Text("每月起始日") },
+            text = {
+                Column {
+                    Text("输入 1–28 之间的日期，月份窗口从该日起算。")
+                    OutlinedTextField(
+                        value = monthInput,
+                        onValueChange = { monthInput = it },
+                        label = { Text("起始日") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val day = monthInput.toIntOrNull()?.coerceIn(1, 28)
+                    if (day != null) {
+                        onMonthBeginChange(day)
+                        showMonthDialog = false
+                    }
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMonthDialog = false }) { Text("取消") }
             },
         )
     }

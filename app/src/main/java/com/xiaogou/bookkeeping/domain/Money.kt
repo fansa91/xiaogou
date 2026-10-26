@@ -7,9 +7,22 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-/** 分 → 元显示，如 12345 分 → "123.45" */
-fun centsToYuan(cents: Long): String =
-    BigDecimal(cents).divide(BigDecimal(100)).setScale(2, RoundingMode.HALF_UP).toPlainString()
+/**
+ * 显示口径（单 Activity 应用内的全局开关，由 MainActivity 从设置里同步）：
+ * - currencySymbol：金额前加 ¥（源码 setting_currency 口径）
+ * - monthBeginDay：每月起始日（1–28，源码 setting_month_begin 口径），
+ *   月份窗口从该日算起，而不是每月 1 日；为 1 时与旧行为完全一致。
+ */
+object DisplayConfig {
+    var currencySymbol: Boolean = false
+    var monthBeginDay: Int = 1
+}
+
+/** 分 → 元显示，如 12345 分 → "123.45"，开货币符号时为 "¥123.45"。 */
+fun centsToYuan(cents: Long): String {
+    val value = BigDecimal(cents).divide(BigDecimal(100)).setScale(2, RoundingMode.HALF_UP).toPlainString()
+    return if (DisplayConfig.currencySymbol) "¥$value" else value
+}
 
 /** 元输入 → 分，非法/空返回 null。旧版口径：BigDecimal ×100。 */
 fun yuanToCents(input: String): Long? {
@@ -23,12 +36,13 @@ fun yuanToCents(input: String): Long? {
     }
 }
 
-/** 当月起止（毫秒，本地时区，左闭右开）：[start, end) */
+/** 当月起止（毫秒，本地时区，左闭右开）：[start, end)，起始日取 DisplayConfig。 */
 fun monthRange(year: Int, monthZeroBased: Int): Pair<Long, Long> {
+    val beginDay = DisplayConfig.monthBeginDay.coerceIn(1, 28)
     val startCal = Calendar.getInstance().apply {
         set(Calendar.YEAR, year)
         set(Calendar.MONTH, monthZeroBased)
-        set(Calendar.DAY_OF_MONTH, 1)
+        set(Calendar.DAY_OF_MONTH, beginDay)
         set(Calendar.HOUR_OF_DAY, 0)
         set(Calendar.MINUTE, 0)
         set(Calendar.SECOND, 0)

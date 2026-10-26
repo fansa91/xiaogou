@@ -10,6 +10,7 @@ import androidx.navigation.compose.rememberNavController
 import com.xiaogou.bookkeeping.data.AppDatabase
 import com.xiaogou.bookkeeping.data.BookkeepingRepository
 import com.xiaogou.bookkeeping.data.Settings
+import com.xiaogou.bookkeeping.domain.DisplayConfig
 import com.xiaogou.bookkeeping.ui.AppViewModelFactory
 import com.xiaogou.bookkeeping.ui.HomeViewModel
 import com.xiaogou.bookkeeping.ui.assets.AssetsAddScreen
@@ -68,6 +69,13 @@ class MainActivity : ComponentActivity() {
             // 主题状态提升到 Activity：设置页换色 / 换夜间模式后整棵树立即生效。
             var themeKey by remember { mutableStateOf(settings.themeKey) }
             var nightOption by remember { mutableStateOf(settings.nightModeOption()) }
+            var currencySymbol by remember { mutableStateOf(settings.currencySymbol) }
+            var monthBeginDay by remember { mutableStateOf(settings.monthBeginDay) }
+            var assetsPie by remember { mutableStateOf(settings.assetsPie) }
+            var statisticsPie by remember { mutableStateOf(settings.statisticsPie) }
+            // 显示口径同步到全局（金额符号、月份起始日），首页/统计的月份窗口据此算。
+            DisplayConfig.currencySymbol = currencySymbol
+            DisplayConfig.monthBeginDay = monthBeginDay
             val darkTheme = when (nightOption) {
                 NightMode.DAY -> false
                 NightMode.NIGHT -> true
@@ -108,6 +116,7 @@ class MainActivity : ComponentActivity() {
                             onAdd = { nav.navigate("assets_add") },
                             onDetail = { id -> nav.navigate("assets_detail/$id") },
                             onTransfer = { nav.navigate("assets_transfer") },
+                            showPie = assetsPie,
                         )
                     }
                     composable("assets_add") {
@@ -158,6 +167,7 @@ class MainActivity : ComponentActivity() {
                             onSubtype = { id -> nav.navigate("subtype/$id") },
                             onAllTypes = { nav.navigate("all_types") },
                             onHist = { nav.navigate("statistics_hist") },
+                            showPie = statisticsPie,
                         )
                     }
                     composable("all_types") {
@@ -188,6 +198,27 @@ class MainActivity : ComponentActivity() {
                             onReimburse = { nav.navigate("reimburse") },
                             onStatistics = { nav.navigate("statistics_adv") },
                             onLockSetup = { nav.navigate("lock_setup") },
+                            onTypes = { nav.navigate("types") },
+                            currencySymbol = currencySymbol,
+                            onCurrencyChange = { v ->
+                                settings.currencySymbol = v
+                                currencySymbol = v
+                            },
+                            monthBeginDay = monthBeginDay,
+                            onMonthBeginChange = { day ->
+                                settings.monthBeginDay = day
+                                monthBeginDay = day
+                            },
+                            assetsPie = assetsPie,
+                            onAssetsPieChange = { v ->
+                                settings.assetsPie = v
+                                assetsPie = v
+                            },
+                            statisticsPie = statisticsPie,
+                            onStatisticsPieChange = { v ->
+                                settings.statisticsPie = v
+                                statisticsPie = v
+                            },
                         )
                     }
                     composable("lock_setup") {

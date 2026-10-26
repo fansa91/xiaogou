@@ -122,7 +122,11 @@ class AssetsViewModel(private val repo: BookkeepingRepository) : ViewModel() {
     fun modifyRecords(assetsId: Long) = repo.modifyRecords(assetsId)
 
     fun add(name: String, type: Int, initMoneyCents: Long, remark: String, onDone: () -> Unit) {
-        viewModelScope.launch { repo.addAssets(name, type, initMoneyCents, remark); onDone() }
+        add(name, type, initMoneyCents, remark, "", onDone)
+    }
+
+    fun add(name: String, type: Int, initMoneyCents: Long, remark: String, imgName: String, onDone: () -> Unit) {
+        viewModelScope.launch { repo.addAssets(name, type, initMoneyCents, remark, imgName); onDone() }
     }
 
     fun transfer(fromId: Long, toId: Long, moneyCents: Long, remark: String, onDone: () -> Unit) {

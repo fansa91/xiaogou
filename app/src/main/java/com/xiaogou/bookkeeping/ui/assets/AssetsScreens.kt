@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xiaogou.bookkeeping.domain.centsToYuan
 import com.xiaogou.bookkeeping.domain.formatDate
@@ -56,9 +57,12 @@ import com.xiaogou.bookkeeping.ui.theme.WalkDimens
  * - 右下角 50dp 悬浮按钮（16dp 圆角）向上展开：转账在上、新增在下，
  *   展开时先点哪个就是哪个；底部留 92dp 给悬浮 tab。
  */
+/** 资产图标候选（源码图标选择器的 Compose 版：用符号代替原图标资源）。 */
+val AssetIcons = listOf("💰", "🏦", "💳", "💵", "🏠", "🚗", "📈", "💎")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AssetsScreen(factory: AppViewModelFactory, onAdd: () -> Unit, onDetail: (Long) -> Unit, onTransfer: () -> Unit) {
+fun AssetsScreen(factory: AppViewModelFactory, onAdd: () -> Unit, onDetail: (Long) -> Unit, onTransfer: () -> Unit, showPie: Boolean = true) {
     val vm: AssetsViewModel = viewModel(factory = factory)
     val assets by vm.assets.collectAsState()
     var fabOpen by remember { mutableStateOf(false) }
@@ -108,7 +112,7 @@ fun AssetsScreen(factory: AppViewModelFactory, onAdd: () -> Unit, onDetail: (Lon
                     Text("${assets.size} 个账户")
                 }
             }
-            item {
+            if (showPie) item {
                 // 资产饼图（assets_pie 口径）：资产 / 负债切换，120dp 环形饼 + 图例。
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { pieLiabilities = false }) { Text("资产") }
@@ -149,7 +153,7 @@ fun AssetsScreen(factory: AppViewModelFactory, onAdd: () -> Unit, onDetail: (Lon
                                 .clip(RoundedCornerShape(12.dp))
                                 .padding(0.dp),
                             contentAlignment = Alignment.Center,
-                        ) { Text((a.name.firstOrNull() ?: "?").toString()) }
+                        ) { Text(if (a.imgName.isNotBlank()) a.imgName else (a.name.firstOrNull() ?: "?").toString()) }
                         Column(modifier = Modifier.weight(1f).padding(start = 6.dp)) {
                             Text(a.name)
                             if (a.remark.isNotBlank()) Text(a.remark, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -170,9 +174,17 @@ fun AssetsAddScreen(factory: AppViewModelFactory, onDone: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var remark by remember { mutableStateOf("") }
+    var icon by remember { mutableStateOf(AssetIcons.first()) }
     var error by remember { mutableStateOf<String?>(null) }
     Scaffold(topBar = { TopAppBar(title = { Text("新增账户") }) }) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("图标")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssetIcons.forEach { ic ->
+                    OutlinedButton(onClick = { icon = ic }, modifier = Modifier.size(48.dp)) { Text(ic) }
+                }
+            }
+            Text("已选：$icon")
             OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("账户名") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("初始金额（元）") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             OutlinedTextField(value = remark, onValueChange = { remark = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -184,7 +196,7 @@ fun AssetsAddScreen(factory: AppViewModelFactory, onDone: () -> Unit) {
                     when {
                         name.isBlank() -> error = "请填写账户名"
                         cents == null || cents < 0 -> error = "初始金额格式不正确"
-                        else -> vm.add(name, 0, cents, remark, onDone)
+                        else -> vm.add(name, 0, cents, remark, icon, onDone)
                     }
                 }, modifier = Modifier.weight(1f).height(48.dp)) { Text("确定") }
             }
@@ -270,26 +282,77 @@ fun TransferScreen(factory: AppViewModelFactory, onDone: () -> Unit) {
         }
     }
 
+    // 转账用同一套自定义键盘（activity_assets_transfer 口径）：金额框 +
+    // 备注框在上，数字键盘在下，不弹系统键盘；数字规则与记账键盘一致
+    // （最多 9 位、小数后 2 位、00 键）。
+    fun appendDigit(key: String) {
+        if (amount.replace(".", "").length >= 9) return
+        if (key == ".") {
+            if (!amount.contains(".")) amount = if (amount.isEmpty()) "0." else "$amount."
+            return
+        }
+        if (key == "00") {
+            if (amount.isEmpty()) return
+            if (amount.contains(".")) {
+                val afterDot = amount.substringAfter(".", "")
+                if (afterDot.length >= 2) return
+                amount += "0".repeat(2 - afterDot.length)
+            } else {
+                amount += "00"
+            }
+            return
+        }
+        if (amount.contains(".") && amount.substringAfter(".").length >= 2) return
+        amount += key
+    }
+
     Scaffold(topBar = { TopAppBar(title = { Text("账户转账") }) }) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("转出账户")
             picker("选择转出账户", fromId) { fromId = it }
             Text("转入账户")
             picker("选择转入账户", toId) { toId = it }
-            OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("金额（元）") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            Text(if (amount.isEmpty()) "0.00" else amount, fontSize = 28.sp)
             OutlinedTextField(value = remark, onValueChange = { remark = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             error?.let { Text(it) }
-            Button(onClick = {
-                val cents = yuanToCents(amount)
-                val f = fromId
-                val t = toId
-                when {
-                    f == null || t == null -> error = "请先选择转出与转入账户"
-                    f == t -> error = "转出与转入账户不能相同"
-                    cents == null || cents <= 0 -> error = "请填写大于 0 的金额"
-                    else -> vm.transfer(f, t, cents, remark, onDone)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    androidx.compose.foundation.lazy.grid.items(listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "00")) { k ->
+                        OutlinedButton(
+                            onClick = { appendDigit(k) },
+                            modifier = Modifier.fillMaxWidth().height(WalkDimens.keyboardRowHeight),
+                        ) { Text(k) }
+                    }
                 }
-            }, modifier = Modifier.fillMaxWidth()) { Text("确认转账") }
+                Column(
+                    modifier = Modifier.width(WalkDimens.keyboardSideColumnWidth),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { if (amount.isNotEmpty()) amount = amount.dropLast(1) },
+                        modifier = Modifier.fillMaxWidth().height(WalkDimens.keyboardRowHeight),
+                    ) { Text("⌫") }
+                    Button(
+                        onClick = {
+                            val cents = yuanToCents(amount)
+                            val f = fromId
+                            val t = toId
+                            when {
+                                f == null || t == null -> error = "请先选择转出与转入账户"
+                                f == t -> error = "转出与转入账户不能相同"
+                                cents == null || cents <= 0 -> error = "请填写大于 0 的金额"
+                                else -> vm.transfer(f, t, cents, remark, onDone)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(WalkDimens.keyboardRowHeight),
+                    ) { Text("确认") }
+                }
+            }
         }
     }
 }

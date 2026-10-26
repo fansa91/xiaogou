@@ -131,10 +131,10 @@ class BookkeepingRepository(private val db: AppDatabase) {
         }
     }
 
-    suspend fun addAssets(name: String, type: Int, initMoneyCents: Long, remark: String): Long {
+    suspend fun addAssets(name: String, type: Int, initMoneyCents: Long, remark: String, imgName: String = ""): Long {
         val now = System.currentTimeMillis()
         val id = db.assetsDao().insert(
-            Assets(name = name, imgName = "", type = type, state = 1, remark = remark, createTime = now, money = initMoneyCents, ranking = 0, initMoney = initMoneyCents),
+            Assets(name = name, imgName = imgName, type = type, state = 1, remark = remark, createTime = now, money = initMoneyCents, ranking = 0, initMoney = initMoneyCents),
         )
         db.assetsModifyDao().insert(
             AssetsModifyRecord(assetsId = id, money = initMoneyCents, moneyBefore = 0, state = 1, createTime = now),
