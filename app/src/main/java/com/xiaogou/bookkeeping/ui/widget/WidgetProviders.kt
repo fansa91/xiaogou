@@ -57,7 +57,7 @@ private fun todayRange(): Pair<Long, Long> {
     return start.timeInMillis to end.timeInMillis
 }
 
-private abstract class XiaogouWidgetProvider : AppWidgetProvider() {
+abstract class XiaogouWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
