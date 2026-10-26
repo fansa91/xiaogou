@@ -1,0 +1,86 @@
+# 小狗记账 Kotlin 重写版：GitHub Actions 编译 APK（kotlin-rewrite 分支）
+#
+# 技术栈：AGP 8.5.2 / Gradle 8.7 / Kotlin 2.0.21 / compileSdk 34 / minSdk 21 / targetSdk 34
+# 全部依赖走 Maven，不再有旧版的 R 转换、q0 占位修复等步骤。
+# 多架构：app/build.gradle 里 splits.abi 已开启，一次 assembleDebug 产出：
+#   app-armeabi-v7a-debug.apk、app-arm64-v8a-debug.apk、
+#   app-x86-debug.apk、app-x86_64-debug.apk、app-universal-debug.apk
+# 全部作为 artifact 上传；不知道自己机型时装 universal 包即可。
+# SDK 步骤沿用旧版验证过的思路：JDK 17（自带 sdkmanager 是 Java 17 编译的，
+# JDK 11 会报 UnsupportedClassVersionError），在几个常见位置找 sdkmanager，
+# 找不到就下载 command line tools，再装 platforms;android-34。
+# 步骤日志需要登录才能看，所以编译失败时把 Gradle 的 "What went wrong"
+# 和 error: 行写进公开 Annotations，见底部 Report 步骤。
+name: Build APK
+
+on:
+  push:
+    branches: [kotlin-rewrite]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Ensure Android SDK 34
+        run: |
+          SDKMANAGER=""
+          SDK_DIR=""
+          for d in "$ANDROID_HOME" "/usr/local/lib/android-sdk" "/usr/lib/android-sdk" "$HOME/Android/Sdk" "/opt/android-sdk"; do
+            [ -n "$d" ] || continue
+            for p in "$d/cmdline-tools/latest/bin/sdkmanager" "$d"/cmdline-tools/*/bin/sdkmanager; do
+              if [ -x "$p" ]; then SDKMANAGER="$p"; SDK_DIR="$d"; break 2; fi
+            done
+          done
+          if [ -z "$SDKMANAGER" ]; then
+            SDK_DIR="$HOME/android-sdk"
+            mkdir -p "$SDK_DIR/cmdline-tools"
+            cd /tmp
+            curl -sSL -o cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q -o cmdtools.zip -d "$SDK_DIR/cmdline-tools/tmp"
+            mv "$SDK_DIR/cmdline-tools/tmp/cmdline-tools" "$SDK_DIR/cmdline-tools/latest"
+            SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          echo "SDK_DIR=$SDK_DIR"
+          echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
+          yes | "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses || true
+          "$SDKMANAGER" --sdk_root="$SDK_DIR" \
+            "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+
+      - name: Set up Gradle 8.7
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: "8.7"
+
+      - name: Build debug APKs (multi-ABI)
+        run: |
+          gradle :app:assembleDebug --stacktrace > /tmp/build.log 2>&1 || BUILD_EXIT=$?
+          echo "build exit=${BUILD_EXIT:-0}"
+          ls -lh app/build/outputs/apk/debug/ || true
+          if [ "${BUILD_EXIT:-0}" -ne 0 ]; then
+            echo "::error::gradle build failed exit=${BUILD_EXIT}"
+            exit "${BUILD_EXIT}"
+          fi
+
+      - name: Report build error in annotations
+        if: failure()
+        run: |
+          awk '/What went wrong:/{flag=1} flag{print; count++} count>60{exit}' /tmp/build.log | head -60 | while IFS= read -r line; do echo "::error::$line"; done || true
+          grep -E "^e:|error:" /tmp/build.log | head -40 | while IFS= read -r line; do echo "::error::$line"; done || true
+
+      - name: Upload debug APKs
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaogou-debug-apks
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

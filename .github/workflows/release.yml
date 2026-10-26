@@ -1,0 +1,117 @@
+# 小狗记账 Kotlin 重写版：发布到 GitHub Release（正式签名包）
+#
+# 触发方式：推送 tag（phase-* 或 v*），例如：git tag v0.2 && git push origin v0.2
+# 触发后：与 android.yml 相同的构建步骤（JDK 17 + SDK 34 + Gradle 8.7，
+# assembleRelease，多架构分包），然后把 5 个正式签名 APK 发布到该 tag 的
+# GitHub Release 里（prerelease: true，因为重写版尚未合回 main）。
+#
+# 前置条件（缺一个都会在解码步骤直接失败，不会悄悄发成 debug 包）：
+# 仓库 Settings → Secrets and variables → Actions → New repository secret：
+#   KEYSTORE_BASE64    keystore 文件的 base64 文本（本地：base64 -w0 你的.keystore）
+#   KEY_ALIAS          生成 keystore 时的别名
+#   KEYSTORE_PASSWORD  keystore 密码
+#   KEY_PASSWORD       key 密码
+# keystore 文件本身绝不要提交进仓库；丢了就没法给已装用户升级，只能卸载重装。
+name: Release APK
+
+on:
+  push:
+    tags:
+      - "phase-*"
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Ensure Android SDK 34
+        run: |
+          SDKMANAGER=""
+          SDK_DIR=""
+          for d in "$ANDROID_HOME" "/usr/local/lib/android-sdk" "/usr/lib/android-sdk" "$HOME/Android/Sdk" "/opt/android-sdk"; do
+            [ -n "$d" ] || continue
+            for p in "$d/cmdline-tools/latest/bin/sdkmanager" "$d"/cmdline-tools/*/bin/sdkmanager; do
+              if [ -x "$p" ]; then SDKMANAGER="$p"; SDK_DIR="$d"; break 2; fi
+            done
+          done
+          if [ -z "$SDKMANAGER" ]; then
+            SDK_DIR="$HOME/android-sdk"
+            mkdir -p "$SDK_DIR/cmdline-tools"
+            cd /tmp
+            curl -sSL -o cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q -o cmdtools.zip -d "$SDK_DIR/cmdline-tools/tmp"
+            mv "$SDK_DIR/cmdline-tools/tmp/cmdline-tools" "$SDK_DIR/cmdline-tools/latest"
+            SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
+          yes | "$SDKMANAGER" --sdk_root="$SDK_DIR" --licenses || true
+          "$SDKMANAGER" --sdk_root="$SDK_DIR" \
+            "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+
+      - name: Set up Gradle 8.7
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: "8.7"
+
+      - name: Decode signing keystore from Secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::KEYSTORE_BASE64 未设置：请先在仓库 Secrets 里设置 KEYSTORE_BASE64 / KEY_ALIAS / KEYSTORE_PASSWORD / KEY_PASSWORD"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+
+      - name: Build release APKs (multi-ABI, signed)
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          gradle :app:assembleRelease --stacktrace > /tmp/build.log 2>&1 || BUILD_EXIT=$?
+          echo "build exit=${BUILD_EXIT:-0}"
+          ls -lh app/build/outputs/apk/release/ || true
+          if [ "${BUILD_EXIT:-0}" -ne 0 ]; then
+            echo "::error::gradle build failed exit=${BUILD_EXIT}"
+            exit "${BUILD_EXIT}"
+          fi
+
+      - name: Rename APKs to app name + version + ABI
+        # 原文件名：app-armeabi-v7a-release.apk 等
+        # 改后（英文名）：XiaogouBookkeeping-v0.1-armeabi-v7a.apk、
+        #       …-arm64-v8a.apk、…-x86.apk、…-x86_64.apk、…-universal.apk
+        # （版本号取触发的 tag 名）
+        run: |
+          cd app/build/outputs/apk/release
+          for f in app-*-release.apk; do
+            abi="${f#app-}"
+            abi="${abi%-release.apk}"
+            mv "$f" "XiaogouBookkeeping-${{ github.ref_name }}-${abi}.apk"
+          done
+          ls -lh
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/release/*.apk
+          prerelease: true
+          generate_release_notes: true
+          body: |
+            小狗记账 Kotlin 重写版（kotlin-rewrite 分支，多架构正式签名包）。
+            不知道自己机型时装 XiaogouBookkeeping-<版本号>-universal.apk 即可。
+            注意：正式包与 debug 包签名不同，已装 debug 包的用户需先卸载才能装正式包；
+            同一正式签名后续升级可直接覆盖安装。

@@ -1,0 +1,100 @@
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+    id "org.jetbrains.kotlin.plugin.compose"
+    id "com.google.devtools.ksp"
+}
+
+android {
+    namespace "com.xiaogou.bookkeeping"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.xiaogou.bookkeeping"
+        minSdk 21
+        targetSdk 34
+        versionCode 34
+        versionName "0.1"
+    }
+
+    // 正式签名：只从环境变量读，不把任何密码、keystore 文件写进仓库。
+    // 本地 / CI 未设置时，assembleDebug 不受影响；assembleRelease 会在
+    // 签名步骤报错，提示先按 release.yml 里的说明设置 Secrets。
+    // GitHub Secrets（仓库 Settings → Secrets and variables → Actions）：
+    //   KEYSTORE_BASE64 / KEY_ALIAS / KEYSTORE_PASSWORD / KEY_PASSWORD
+    // 工作流会把 KEYSTORE_BASE64 解码成 $KEYSTORE_PATH 指向的文件。
+    signingConfigs {
+        release {
+            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "release.keystore")
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            signingConfig = signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    buildFeatures {
+        compose true
+    }
+
+    // 多架构：一次编译出 4 个 ABI 分包 + 1 个通用包。
+    // 旧版 APK 本来就没有 native .so，所以本来就是全架构通用；
+    // 这里显式分包是为了以后引入带 native 库的依赖（以及现在就让 CI
+    // 产出可按机型分的包），同时保留 universalApk 给未知架构/模拟器兜底。
+    // 注意：分包目前共用 versionCode 34，手动安装时按文件名区分即可；
+    // 未来若要以多 APK 形式上架应用商店，再给各 ABI 分配不同的 versionCode。
+    splits {
+        abi {
+            enable true
+            reset()
+            include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+            universalApk true
+        }
+    }
+
+    packagingOptions {
+        resources.excludes.add("META-INF/*.kotlin_module")
+    }
+}
+
+dependencies {
+    implementation "androidx.core:core-ktx:1.13.1"
+    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.8.7"
+    implementation "androidx.lifecycle:lifecycle-runtime-compose:2.8.7"
+    implementation "androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7"
+    implementation "androidx.activity:activity-compose:1.9.2"
+    implementation "androidx.activity:activity-ktx:1.9.2"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1"
+
+    // Compose (Material3)，版本由 BOM 统一管理
+    implementation platform("androidx.compose:compose-bom:2024.09.02")
+    implementation "androidx.compose.ui:ui"
+    implementation "androidx.compose.ui:ui-graphics"
+    implementation "androidx.compose.ui:ui-tooling-preview"
+    implementation "androidx.compose.material3:material3"
+    implementation "androidx.navigation:navigation-compose:2.8.0"
+    debugImplementation "androidx.compose.ui:ui-tooling"
+    debugImplementation "androidx.compose.ui:ui-test-manifest"
+
+    // 数据层与定时任务：Phase 1 起用 Room 实体/KSP 生成代码。
+    implementation "androidx.room:room-runtime:2.6.1"
+    implementation "androidx.room:room-ktx:2.6.1"
+    ksp "androidx.room:room-compiler:2.6.1"
+    implementation "androidx.work:work-runtime-ktx:2.9.0"
+}
