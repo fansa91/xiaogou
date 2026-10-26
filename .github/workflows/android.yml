@@ -69,6 +69,9 @@ jobs:
           echo "test exit=${TEST_EXIT:-0}"
           if [ "${TEST_EXIT:-0}" -ne 0 ]; then
             echo "::error::unit tests failed exit=${TEST_EXIT}"
+            # 测试输出被重定向到了 /tmp/test.log，失败时把它打出来，
+            # 否则步骤日志里只有 exit 码，看不出是哪条测试或哪行编译挂了。
+            grep -E "FAILED|e: file|AssertionError|expected:" /tmp/test.log | head -40 | while IFS= read -r line; do echo "::error::$line"; done || true
             exit "${TEST_EXIT}"
           fi
 
