@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -81,6 +82,10 @@ fun WalkBanner(
             contentDescription = null,
             modifier = Modifier.fillMaxWidth().alpha(0.07f),
             contentScale = ContentScale.Crop,
+            // 背景图本身也是白色：旧版 ThemeIcon 会按 color_mode 着色
+            // 再叠 0.07 透明度当水印；不着色的话浅色底上白对白，
+            // 等于没有这张图。着文字色、保持 0.07 透明度。
+            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface),
         )
         Column(modifier = Modifier.fillMaxWidth().padding(top = 62.dp)) {
             Row(
@@ -95,6 +100,7 @@ fun WalkBanner(
                             painter = painterResource(R.drawable.icon_budget),
                             contentDescription = null,
                             modifier = Modifier.size(32.dp),
+                            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimary),
                         )
                         Box(modifier = Modifier.size(60.dp, 24.dp), contentAlignment = Alignment.Center) {
                             LinearProgressIndicator(
@@ -114,6 +120,10 @@ fun WalkBanner(
                             painter = painterResource(leftIconRes),
                             contentDescription = null,
                             modifier = Modifier.padding(start = 2.dp).size(16.dp),
+                            // 这批图标 PNG 本身是纯白：旧版 ThemeIcon 按
+                            // color_mode 着色后才可见；新版直接显示就是
+                            // 白对白，浅色主题下看不见。左边跟金额同色。
+                            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.primary),
                         )
                     }
                     Text(
@@ -128,6 +138,7 @@ fun WalkBanner(
                             painter = painterResource(R.drawable.icon_balance),
                             contentDescription = null,
                             modifier = Modifier.padding(start = 2.dp).size(14.dp),
+                            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface),
                         )
                     }
                 }
@@ -138,6 +149,7 @@ fun WalkBanner(
                             painter = painterResource(rightIconRes),
                             contentDescription = null,
                             modifier = Modifier.padding(start = 2.dp).size(16.dp),
+                            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface),
                         )
                     }
                     Text(rightValue, fontSize = 28.sp, modifier = Modifier.padding(top = 10.dp))
