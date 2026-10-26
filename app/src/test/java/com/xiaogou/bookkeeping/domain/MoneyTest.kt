@@ -104,4 +104,13 @@ class MoneyTest {
     fun formatDate_nullIsEmpty() {
         assertEquals("", formatDate(null))
     }
+
+    @Test
+    fun weekdayText_monday() {
+        // 2026-10-26 是周一（date 命令核过），用日历字段构造时间，
+        // 不写死毫秒数，避免时区差异。
+        val ms = Calendar.getInstance().apply { set(2026, Calendar.OCTOBER, 26, 12, 0, 0) }.timeInMillis
+        assertEquals("周一", weekdayText(ms))
+        assertEquals("", weekdayText(null))
+    }
 }

@@ -1,6 +1,7 @@
 package com.xiaogou.bookkeeping.ui.home
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,8 +9,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -39,6 +45,7 @@ import com.xiaogou.bookkeeping.data.entity.Record
 import com.xiaogou.bookkeeping.domain.centsToYuan
 import com.xiaogou.bookkeeping.domain.formatDate
 import com.xiaogou.bookkeeping.domain.formatMonth
+import com.xiaogou.bookkeeping.domain.weekdayText
 import com.xiaogou.bookkeeping.ui.AppViewModelFactory
 import com.xiaogou.bookkeeping.ui.AssetsViewModel
 import com.xiaogou.bookkeeping.ui.BudgetViewModel
@@ -230,18 +237,65 @@ fun HomeScreen(
             }
             item { Text("本月记录（${records.size} 条）", modifier = Modifier.padding(horizontal = 16.dp)) }
             byDay.forEach { (day, dayRecords) ->
+                // 日期头按备份 layout_record_header 排布：整条 40dp 高；
+                // 左边月日小标签（22dp 高、6dp 圆角，月和日分两段），
+                // 后面跟 32×22dp 的星期小标签，右边是当天收入 / 支出，
+                // 两段之间隔 10dp，不再只写一个合计。
                 item {
+                    val firstTime = dayRecords.firstOrNull()?.time
+                    val dayIncome = dayRecords.filter { typeById[it.recordTypeId]?.type == 1 }.sumOf { it.money ?: 0 }
+                    val dayExpense = dayRecords.filter { typeById[it.recordTypeId]?.type != 1 }.sumOf { it.money ?: 0 }
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(day)
-                        Text("合计 ${centsToYuan(dayRecords.sumOf { it.money ?: 0 })}")
+                        Row(
+                            modifier = Modifier.height(22.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(start = 6.dp, end = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "${day.substring(5, 7).toInt()}月",
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                "${day.substring(8, 10).toInt()}日",
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 4.dp),
+                            )
+                        }
+                        Box(
+                            modifier = Modifier.padding(start = 6.dp)
+                                .size(32.dp, 22.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(weekdayText(firstTime), fontSize = 11.sp)
+                        }
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("收 ${centsToYuan(dayIncome)}", fontSize = 16.sp)
+                            Text(
+                                "支 ${centsToYuan(dayExpense)}",
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 10.dp),
+                            )
+                        }
                     }
                 }
                 items(dayRecords) { record ->
+                    val type = typeById[record.recordTypeId]
                     RecordRow(
-                        record, typeById[record.recordTypeId]?.name ?: "",
+                        record, type?.name ?: "",
+                        imgName = type?.imgName,
+                        assetName = assetById[record.assetsId]?.name,
                         onDelete = { deletingRecord = record },
                         onClick = { detailRecord = record },
                     )
@@ -327,21 +381,62 @@ fun HomeScreen(
 }
 
 @Composable
-fun RecordRow(record: Record, typeName: String, onDelete: (() -> Unit)? = null, onClick: (() -> Unit)? = null) {
-    Card(
+fun RecordRow(
+    record: Record,
+    typeName: String,
+    imgName: String? = null,
+    assetName: String? = null,
+    onDelete: (() -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
+) {
+    // 记录行按备份 layout_record_item 排布，不再套卡片：
+    // 左边是时间（16sp）+ 6×12dp 主题色指示条，内容行在时间
+    // 右边、并往下错 16dp（备份里那块空 divider 的高度）；
+    // 内容是 40dp 圆角 12dp 的图标位 + 分类名（14sp 单行）
+    // + 备注（12sp，隔 6dp），右边是金额（16sp）。
+    // 删除键是现在这版已有的操作，备份里没有，保留在金额下方。
+    Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
             .let { if (onClick != null) it.clickable { onClick() } else it },
     ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(formatDate(record.time).takeLast(5), fontSize = 16.sp)
+            Box(
+                modifier = Modifier.padding(start = 6.dp)
+                    .size(6.dp, 12.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.primary),
+            )
+        }
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.weight(1f).padding(start = 10.dp, top = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("$typeName · ${record.remark ?: ""}")
-                Text(formatDate(record.time))
+            Box(
+                modifier = Modifier.size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (!imgName.isNullOrBlank()) imgName else (typeName.firstOrNull() ?: "?").toString(),
+                    fontSize = 18.sp,
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f).padding(start = 16.dp, end = 10.dp),
+            ) {
+                Text(typeName, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val second = listOfNotNull(
+                    record.remark?.takeIf { it.isNotBlank() },
+                    assetName?.takeIf { it.isNotBlank() },
+                ).joinToString(" · ")
+                if (second.isNotBlank()) {
+                    Text(second, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                }
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(centsToYuan(record.money ?: 0))
+                Text(centsToYuan(record.money ?: 0), fontSize = 16.sp)
                 if (onDelete != null) {
                     TextButton(onClick = onDelete) { Text("删除") }
                 }

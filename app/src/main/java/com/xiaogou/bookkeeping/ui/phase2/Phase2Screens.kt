@@ -367,7 +367,7 @@ fun StatisticsAdvancedScreen(
     }
     val monthTotal = remember(monthSums) { monthSums.sumOf { it.second }.takeIf { it > 0 } ?: 1L }
     Scaffold(topBar = { TopAppBar(title = { Text("统计") }) }) { padding ->
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(30.dp)) {
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(40.dp)) {
             item {
                 com.xiaogou.bookkeeping.ui.theme.StatisticsBlockHeader("分类占比")
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -376,10 +376,10 @@ fun StatisticsAdvancedScreen(
                     TextButton(onClick = { shiftMonth(1) }) { Text("下月 ›") }
                 }
                 if (showPie) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp)) {
                         if (monthSums.isNotEmpty()) {
                             PieChart(values = monthSums, colors = pieColors)
-                            Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
+                            Column(modifier = Modifier.weight(1f).padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 monthSums.forEachIndexed { i, (name, v) ->
                                     Text("$name ${v * 100 / monthTotal}% · ${centsToYuan(v)}")
                                 }
@@ -398,12 +398,13 @@ fun StatisticsAdvancedScreen(
             }
             item {
                 com.xiaogou.bookkeeping.ui.theme.StatisticsBlockHeader("收支柱状", onMore = onHist)
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { histIncome = false }) { Text("支出") }
                     OutlinedButton(onClick = { histIncome = true }) { Text("收入") }
                 }
                 if (monthKeys.isNotEmpty()) {
                     com.xiaogou.bookkeeping.ui.theme.HistBarChart(
+                        modifier = Modifier.padding(top = 16.dp),
                         values = if (histIncome) monthIncome else monthExpense,
                         color = if (histIncome) androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
                         else androidx.compose.material3.MaterialTheme.colorScheme.primary,
@@ -417,12 +418,13 @@ fun StatisticsAdvancedScreen(
             }
             item {
                 com.xiaogou.bookkeeping.ui.theme.StatisticsBlockHeader("收支曲线")
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { curveIncome = false }) { Text("支出") }
                     OutlinedButton(onClick = { curveIncome = true }) { Text("收入") }
                 }
                 if (monthKeys.size >= 2) {
                     com.xiaogou.bookkeeping.ui.theme.CurveChart(
+                        modifier = Modifier.padding(top = 16.dp),
                         values = if (curveIncome) monthIncome else monthExpense,
                         color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
                     )
@@ -435,15 +437,20 @@ fun StatisticsAdvancedScreen(
                     Text("至少 2 个月才有曲线")
                 }
             }
-            item { Text("最近 6 个月趋势") }
-            byMonth.forEach { (month, list) ->
-                item {
-                    var exp = 0L
-                    var inc = 0L
-                    list.forEach { r ->
-                        if (typeById[r.recordTypeId]?.type == 1) inc += r.money ?: 0 else exp += r.money ?: 0
+            // 趋势行原来每行都是 LazyColumn 的一个 item，区块间距 40dp
+            // 会直接落在行与行之间、显得过散；收进一个 item 里，
+            // 行间距单独用 12dp，区块之间还是 40dp。
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("最近 6 个月趋势")
+                    byMonth.forEach { (month, list) ->
+                        var exp = 0L
+                        var inc = 0L
+                        list.forEach { r ->
+                            if (typeById[r.recordTypeId]?.type == 1) inc += r.money ?: 0 else exp += r.money ?: 0
+                        }
+                        Text("$month · 支出 ${centsToYuan(exp)} · 收入 ${centsToYuan(inc)}")
                     }
-                    Text("$month · 支出 ${centsToYuan(exp)} · 收入 ${centsToYuan(inc)}")
                 }
             }
             item {

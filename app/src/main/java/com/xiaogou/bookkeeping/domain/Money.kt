@@ -54,6 +54,13 @@ fun monthRange(year: Int, monthZeroBased: Int): Pair<Long, Long> {
 
 fun formatMonth(year: Int, monthZeroBased: Int): String = "%04d-%02d".format(year, monthZeroBased + 1)
 
+/** 星期文案：备份 layout_record_header 里星期小标签的口径（周日–周六）。 */
+fun weekdayText(ms: Long?): String {
+    if (ms == null) return ""
+    val day = Calendar.getInstance().apply { timeInMillis = ms }.get(Calendar.DAY_OF_WEEK)
+    return listOf("周日", "周一", "周二", "周三", "周四", "周五", "周六")[day - 1]
+}
+
 fun formatDate(ms: Long?): String {
     if (ms == null) return ""
     return SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(ms))
