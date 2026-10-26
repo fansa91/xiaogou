@@ -1,8 +1,15 @@
 package com.xiaogou.bookkeeping.ui.record
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -339,14 +346,14 @@ fun RecordAddScreen(factory: AppViewModelFactory, onDone: () -> Unit, onBack: ()
                 modifier = Modifier.weight(1f),
             ) {
                 items(topTypes) { t ->
-                    FilterChip(
+                    CategoryTile(
+                        name = t.name ?: "",
                         selected = selectedTypeId == t.id ||
                             types.firstOrNull { it.id == selectedTypeId }?.parentId == t.id,
                         onClick = {
                             val subs = types.filter { it.parentId == t.id }
                             if (subs.isNotEmpty()) subtypeParent = t else selectedTypeId = t.id
                         },
-                        label = { Text(t.name ?: "") },
                     )
                 }
             }
@@ -471,6 +478,35 @@ fun RecordAddScreen(factory: AppViewModelFactory, onDone: () -> Unit, onBack: ()
                 showCalendar = false
                 showTimePicker(context, dayMs) { recordTimeMs = it }
             },
+        )
+    }
+}
+
+/**
+ * 分类格子：以前用 FilterChip，只有 32dp 高，点起来偏小；
+ * 备份里分类项是 40dp 图标加上下各 4dp 边距、也就是 48dp 高，
+ * 这里直接按 48dp 做：选中是主题容器色、未选是 surfaceVariant，
+ * 文字 16sp 居中。FilterChip 自身高度是写死的，外面套 height
+ * 改不动，所以不用它、自己画一个格子。
+ */
+@Composable
+fun CategoryTile(name: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxWidth().height(48.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceVariant,
+            )
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            name,
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
