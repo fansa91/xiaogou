@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -318,17 +317,18 @@ fun TransferScreen(factory: AppViewModelFactory, onDone: () -> Unit) {
             OutlinedTextField(value = remark, onValueChange = { remark = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             error?.let { Text(it) }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    androidx.compose.foundation.lazy.grid.items(listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "00")) { k ->
-                        OutlinedButton(
-                            onClick = { appendDigit(k) },
-                            modifier = Modifier.fillMaxWidth().height(WalkDimens.keyboardRowHeight),
-                        ) { Text(k) }
+                // 不用 LazyVerticalGrid：它和 LazyColumn 的 items 扩展同名，
+                // 同时 import 会冲突；键盘固定 4 行 × 3 列，直接按行排。
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "00").chunked(3).forEach { rowKeys ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            rowKeys.forEach { k ->
+                                OutlinedButton(
+                                    onClick = { appendDigit(k) },
+                                    modifier = Modifier.weight(1f).height(WalkDimens.keyboardRowHeight),
+                                ) { Text(k) }
+                            }
+                        }
                     }
                 }
                 Column(
