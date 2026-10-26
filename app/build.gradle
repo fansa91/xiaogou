@@ -99,4 +99,7 @@ dependencies {
     implementation "androidx.work:work-runtime-ktx:2.9.0"
     // 生物识别锁：指纹 / 面容（USE_BIOMETRIC 口径），PIN 仍是兜底。
     implementation "androidx.biometric:biometric:1.1.0"
+    // 本地单元测试（JVM 上跑，不用模拟器）：目前只测纯逻辑类，
+    // 如 BackupCrypto 和 WebDavClient 的 URL 归一化。
+    testImplementation "junit:junit:4.13.2"
 }

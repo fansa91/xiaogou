@@ -28,10 +28,14 @@ class WebDavClient(
     companion object {
         const val DIR_NAME = "ElephantBookkeeping/"
         val DB_FILES = listOf("MoneyKeeper.db", "MoneyKeeper.db-shm", "MoneyKeeper.db-wal")
+
+        /** 纯字符串处理，不碰 Android API，JVM 单元测试可以直接测。 */
+        fun normalizeBaseUrl(address: String): String =
+            address.trim().trimEnd('/') + "/" + DIR_NAME
     }
 
     /** 备份根目录 URL，末尾带斜杠。 */
-    val baseUrl: String = address.trim().trimEnd('/') + "/" + DIR_NAME
+    val baseUrl: String = normalizeBaseUrl(address)
 
     private val authHeader: String =
         "Basic " + Base64.encodeToString(

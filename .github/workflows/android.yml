@@ -61,6 +61,25 @@ jobs:
         with:
           gradle-version: "8.7"
 
+      # 本地单元测试（JVM 上跑，不用模拟器）：目前测 BackupCrypto 往返 /
+      # 口令错 / 篡改 / 明文识别和 WebDavClient 地址归一化；测不过就不出包。
+      - name: Run unit tests
+        run: |
+          gradle :app:testDebugUnitTest --stacktrace > /tmp/test.log 2>&1 || TEST_EXIT=$?
+          echo "test exit=${TEST_EXIT:-0}"
+          if [ "${TEST_EXIT:-0}" -ne 0 ]; then
+            echo "::error::unit tests failed exit=${TEST_EXIT}"
+            exit "${TEST_EXIT}"
+          fi
+
+      - name: Upload unit test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaogou-unit-test-reports
+          path: app/build/test-results/testDebugUnitTest/
+          if-no-files-found: ignore
+
       - name: Build debug APKs (multi-ABI)
         run: |
           gradle :app:assembleDebug --stacktrace > /tmp/build.log 2>&1 || BUILD_EXIT=$?
