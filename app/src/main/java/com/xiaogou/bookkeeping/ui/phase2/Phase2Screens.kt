@@ -708,7 +708,7 @@ fun SettingsScreen(
                 if (factory != null) {
                     SettingsRow(icon = { Text("导") }, title = "账单导出", subtitle = "导出为 CSV 文件并发送", onClick = { showExportDialog = true })
                 }
-                SettingsRow(icon = { Text("关") }, title = "关于", subtitle = "小狗记账 0.2", onClick = { showAboutDialog = true })
+                SettingsRow(icon = { Text("关") }, title = "关于", subtitle = "小狗记账 0.3", onClick = { showAboutDialog = true })
                 SettingsRow(icon = { Text("私") }, title = "隐私政策", subtitle = "数据只存在本机", onClick = { showPrivacyDialog = true })
             }
             item {
@@ -801,7 +801,7 @@ fun SettingsScreen(
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showAboutDialog = false },
             title = { Text("关于小狗记账") },
-            text = { Text("小狗记账 0.2\n记一笔收支、管理多个账户、按分类做月预算、看月度与分类统计；支持周期记账与预算提醒。") },
+            text = { Text("小狗记账 0.3\n记一笔收支、管理多个账户、按分类做月预算、看月度与分类统计；支持周期记账与预算提醒。") },
             confirmButton = {
                 TextButton(onClick = { showAboutDialog = false }) { Text("知道了") }
             },
