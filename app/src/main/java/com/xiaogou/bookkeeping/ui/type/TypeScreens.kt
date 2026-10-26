@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,8 +55,9 @@ fun TypeManageScreen(factory: AppViewModelFactory, onAdd: () -> Unit) {
                 }
             }
             val shown = types.filter { it.type == if (showIncome) 1 else 0 }
-            items(shown) { t ->
-                val index = shown.indexOf(t)
+            // 性能：以前每行都用 indexOf 找自己是第几个，是平方级开销；
+            // itemsIndexed 直接给下标，排序按钮用它判断首尾。
+            itemsIndexed(shown) { index, t ->
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(WalkDimens.rowCorner)) {
                     // 右边 5 个控件默认内边距加起来就超 270dp，左边名字再一长，
                     // 开关直接被挤出屏外。左边给 weight + 单行省略，右边按钮

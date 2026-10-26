@@ -336,25 +336,36 @@ fun StatisticsAdvancedScreen(
         androidx.compose.ui.graphics.Color(0xFF65C3AC),
     )
     // 按年月分组：yyyy-MM → 支出/收入
-    val byMonth = records.groupBy {
-        val cal = java.util.Calendar.getInstance().apply { timeInMillis = it.time ?: 0 }
-        "%04d-%02d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1)
-    }.toSortedMap()
-    val monthKeys = byMonth.keys.toList()
-    val monthExpense = monthKeys.map { k ->
-        byMonth[k]?.filter { typeById[it.recordTypeId]?.type != 1 }?.sumOf { it.money ?: 0 } ?: 0L
+    // 性能：这些派生数据以前每次重组都对近 6 个月记录全量 groupBy /
+    // filter / sum，点切换、滑屏都重算；现在按输入缓存，只在记录、
+    // 分类、所选月份变时重算。
+    val byMonth = remember(records) {
+        records.groupBy {
+            val cal = java.util.Calendar.getInstance().apply { timeInMillis = it.time ?: 0 }
+            "%04d-%02d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1)
+        }.toSortedMap()
     }
-    val monthIncome = monthKeys.map { k ->
-        byMonth[k]?.filter { typeById[it.recordTypeId]?.type == 1 }?.sumOf { it.money ?: 0 } ?: 0L
+    val monthKeys = remember(byMonth) { byMonth.keys.toList() }
+    val monthExpense = remember(byMonth, typeById) {
+        monthKeys.map { k ->
+            byMonth[k]?.filter { typeById[it.recordTypeId]?.type != 1 }?.sumOf { it.money ?: 0 } ?: 0L
+        }
+    }
+    val monthIncome = remember(byMonth, typeById) {
+        monthKeys.map { k ->
+            byMonth[k]?.filter { typeById[it.recordTypeId]?.type == 1 }?.sumOf { it.money ?: 0 } ?: 0L
+        }
     }
     val thisMonth = "%04d%02d".format(selYear, selMonth + 1)
-    val monthSums = records.filter {
-        val cal = java.util.Calendar.getInstance().apply { timeInMillis = it.time ?: 0 }
-        "%04d%02d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1) == thisMonth
-    }.groupBy { it.recordTypeId }.map { (id, list) ->
-        (typeById[id]?.name ?: "") to list.sumOf { it.money ?: 0 }
-    }.filter { it.second > 0 }
-    val monthTotal = monthSums.sumOf { it.second }.takeIf { it > 0 } ?: 1L
+    val monthSums = remember(records, typeById, thisMonth) {
+        records.filter {
+            val cal = java.util.Calendar.getInstance().apply { timeInMillis = it.time ?: 0 }
+            "%04d%02d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1) == thisMonth
+        }.groupBy { it.recordTypeId }.map { (id, list) ->
+            (typeById[id]?.name ?: "") to list.sumOf { it.money ?: 0 }
+        }.filter { it.second > 0 }
+    }
+    val monthTotal = remember(monthSums) { monthSums.sumOf { it.second }.takeIf { it > 0 } ?: 1L }
     Scaffold(topBar = { TopAppBar(title = { Text("统计") }) }) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(30.dp)) {
             item {

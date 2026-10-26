@@ -174,8 +174,9 @@ fun HomeScreen(
         (spentByType[firstBudget.recordTypeId] ?: 0L).toFloat() / firstBudget.money.toFloat()
     } else 0f
     val budgetLabel = if (firstBudget != null) "${(budgetProgress * 100).toInt()}%" else "预算"
-    // 按天分组：yyyy-MM-dd → 当天记录（时间倒序，数据库已按时间排）
-    val byDay = records.groupBy { formatDate(it.time).take(10) }
+    // 按天分组：yyyy-MM-dd → 当天记录（时间倒序，数据库已按时间排）；
+    // 缓存起来，免得每次重组都对当月记录重分一次组。
+    val byDay = remember(records) { records.groupBy { formatDate(it.time).take(10) } }
 
     // 底部栏已提到 MainActivity 全局：这里不再自己放栏，内容底部
     // 由外层 Scaffold 的 padding 留出，不用再额外留 92dp。

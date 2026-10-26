@@ -194,10 +194,14 @@ class SearchViewModel(private val repo: BookkeepingRepository) : ViewModel() {
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val results: StateFlow<List<Record>> = _query.flatMapLatest { q ->
-        if (q.isBlank()) kotlinx.coroutines.flow.flowOf(emptyList()) else repo.searchByRemarkOrAsset(q)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // 性能：输入每敲一个字就查一次库；300ms 防抖后停手再查，
+    // flatMapLatest 仍会取消上一次未完成的查询。
+    @OptIn(ExperimentalCoroutinesApi::class, kotlinx.coroutines.FlowPreview::class)
+    val results: StateFlow<List<Record>> = _query
+        .debounce(300)
+        .flatMapLatest { q ->
+            if (q.isBlank()) kotlinx.coroutines.flow.flowOf(emptyList()) else repo.searchByRemarkOrAsset(q)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun setQuery(q: String) { _query.value = q }
     fun types() = repo.allTypes()
