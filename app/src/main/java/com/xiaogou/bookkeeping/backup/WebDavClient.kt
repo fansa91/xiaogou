@@ -133,7 +133,6 @@ class WebDavClient(
     private fun parseHrefs(stream: InputStream): List<String> {
         val names = mutableListOf<String>()
         val parser = XmlPullParserFactory.newInstance().newPullParser()
-        parser.setFeature(XmlPullParserFactory.FEATURE_PROCESS_NAMESPACES, false)
         parser.setInput(stream, "UTF-8")
         var event = parser.eventType
         while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
