@@ -3,7 +3,7 @@
 # 触发方式：推送 tag（phase-* 或 v*），例如：git tag v0.2 && git push origin v0.2
 # 触发后：与 android.yml 相同的构建步骤（JDK 17 + SDK 34 + Gradle 8.7，
 # assembleRelease，多架构分包），然后把 5 个正式签名 APK 发布到该 tag 的
-# GitHub Release 里（prerelease: true，因为重写版尚未合回 main）。
+# GitHub Release 里（prerelease: true，重写版仍在打磨期）。
 #
 # 前置条件（缺一个都会在解码步骤直接失败，不会悄悄发成 debug 包）：
 # 仓库 Settings → Secrets and variables → Actions → New repository secret：
@@ -76,6 +76,16 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
           echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
 
+      # 发布前先跑本地单元测试（与 android.yml 同一套），测不过就不出正式包。
+      - name: Run unit tests
+        run: |
+          gradle :app:testDebugUnitTest --stacktrace > /tmp/test.log 2>&1 || TEST_EXIT=$?
+          echo "test exit=${TEST_EXIT:-0}"
+          if [ "${TEST_EXIT:-0}" -ne 0 ]; then
+            echo "::error::unit tests failed exit=${TEST_EXIT}"
+            exit "${TEST_EXIT}"
+          fi
+
       - name: Build release APKs (multi-ABI, signed)
         env:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -92,7 +102,7 @@ jobs:
 
       - name: Rename APKs to app name + version + ABI
         # 原文件名：app-armeabi-v7a-release.apk 等
-        # 改后（英文名）：XiaogouBookkeeping-v0.1-armeabi-v7a.apk、
+        # 改后（英文名）：XiaogouBookkeeping-v0.2-armeabi-v7a.apk、
         #       …-arm64-v8a.apk、…-x86.apk、…-x86_64.apk、…-universal.apk
         # （版本号取触发的 tag 名）
         run: |
@@ -111,7 +121,7 @@ jobs:
           prerelease: true
           generate_release_notes: true
           body: |
-            小狗记账 Kotlin 重写版（kotlin-rewrite 分支，多架构正式签名包）。
+            小狗记账 Kotlin 重写版（main 分支，多架构正式签名包）。
             不知道自己机型时装 XiaogouBookkeeping-<版本号>-universal.apk 即可。
             注意：正式包与 debug 包签名不同，已装 debug 包的用户需先卸载才能装正式包；
             同一正式签名后续升级可直接覆盖安装。
