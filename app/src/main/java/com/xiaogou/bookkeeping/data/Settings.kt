@@ -9,7 +9,10 @@ import java.security.MessageDigest
  * - key_app_lock_enabled：应用锁开关（Phase 2 新增，旧版锁是生物识别，
  *   本版用 PIN + 生物识别留待后续，PIN 哈希存 key_app_lock_pin_hash）
  * - key_budget_notified_<id>_<yyyyMM>：预算同月去重键
- * - key_web_dav_auto_backup 等 WebDAV 键在 Phase 3 接入时复用同一文件。
+ * - WebDAV：地址 / 账号 / 密码沿用旧版键名（web_dav_address 等），
+ *   自动备份开关与上次备份时间沿用旧版 key_web_dav_auto_backup /
+ *   key_web_dav_auto_backup_time；密码目前仍明文存在本机偏好里，
+ *   与旧版一致，第 4 步界面上会提醒用户这一点。
  */
 class Settings(private val prefs: SharedPreferences) {
     companion object {
@@ -83,6 +86,40 @@ class Settings(private val prefs: SharedPreferences) {
     var pinHash: String?
         get() = prefs.getString("key_app_lock_pin_hash", null)
         set(v) { prefs.edit().putString("key_app_lock_pin_hash", v).apply() }
+
+    /** WebDAV 服务器地址（不含 ElephantBookkeeping/ 目录，用户只填根地址）。 */
+    var webDavAddress: String
+        get() = prefs.getString("web_dav_address", "") ?: ""
+        set(v) { prefs.edit().putString("web_dav_address", v).apply() }
+
+    var webDavUserName: String
+        get() = prefs.getString("web_dav_user_name", "") ?: ""
+        set(v) { prefs.edit().putString("web_dav_user_name", v).apply() }
+
+    var webDavPassword: String
+        get() = prefs.getString("web_dav_password", "") ?: ""
+        set(v) { prefs.edit().putString("web_dav_password", v).apply() }
+
+    /** WebDAV 是否已配齐（地址 / 账号 / 密码三项都不为空）。 */
+    fun isWebDavConfigured(): Boolean =
+        webDavAddress.isNotBlank() && webDavUserName.isNotBlank() && webDavPassword.isNotBlank()
+
+    /** 已配齐时建一个客户端；未配齐时返回 null，调用方不得继续备份。 */
+    fun webDavClient(): com.xiaogou.bookkeeping.backup.WebDavClient? =
+        if (isWebDavConfigured()) {
+            com.xiaogou.bookkeeping.backup.WebDavClient(webDavAddress, webDavUserName, webDavPassword)
+        } else {
+            null
+        }
+
+    var webDavAutoBackup: Boolean
+        get() = prefs.getBoolean("key_web_dav_auto_backup", false)
+        set(v) { prefs.edit().putBoolean("key_web_dav_auto_backup", v).apply() }
+
+    /** 上次自动备份成功或尝试的时间（毫秒），第 5 步做 24 小时去重用。 */
+    var webDavLastBackupTime: Long
+        get() = prefs.getLong("key_web_dav_auto_backup_time", 0L)
+        set(v) { prefs.edit().putLong("key_web_dav_auto_backup_time", v).apply() }
 
     fun isBudgetNotified(budgetId: Long, monthKey: Long): Boolean =
         prefs.getBoolean("key_budget_notified_${budgetId}_$monthKey", false)
