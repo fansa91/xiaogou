@@ -22,6 +22,40 @@ class Settings(private val prefs: SharedPreferences) {
         }
     }
 
+    /** 主题色键，值如 theme_yellow / theme_green / theme_red / theme_blue / theme_cyan。 */
+    var themeKey: String
+        get() = prefs.getString("key_theme_name", "theme_yellow") ?: "theme_yellow"
+        set(v) { prefs.edit().putString("key_theme_name", v).apply() }
+
+    /** 夜间开关（源码 KEY_NIGHT_MODE 口径），默认开 + 跟随系统 = 当前行为不变。 */
+    var nightMode: Boolean
+        get() = prefs.getBoolean("key_night_mode", true)
+        set(v) { prefs.edit().putBoolean("key_night_mode", v).apply() }
+
+    /** 是否跟随系统（源码 KEY_NIGHT_MODE_BY_SYSTEM 口径）。 */
+    var nightBySystem: Boolean
+        get() = prefs.getBoolean("key_night_mode_by_system", true)
+        set(v) { prefs.edit().putBoolean("key_night_mode_by_system", v).apply() }
+
+    /** 夜间三档：0 跟随系统 / 1 白天 / 2 夜间（由上面两个键换算）。 */
+    fun nightModeOption(): Int = when {
+        nightBySystem -> 0
+        !nightMode -> 1
+        else -> 2
+    }
+
+    fun setNightModeOption(option: Int) {
+        when (option) {
+            0 -> { nightMode = true; nightBySystem = true }
+            1 -> { nightMode = false; nightBySystem = false }
+            2 -> { nightMode = true; nightBySystem = false }
+        }
+    }
+
+    /** 夜间是否生效：开启夜间 且（不跟随系统 或 系统本身是夜间）。 */
+    fun isNight(systemDark: Boolean): Boolean =
+        nightMode && (!nightBySystem || systemDark)
+
     var lockEnabled: Boolean
         get() = prefs.getBoolean("key_app_lock_enabled", false)
         set(v) { prefs.edit().putBoolean("key_app_lock_enabled", v).apply() }

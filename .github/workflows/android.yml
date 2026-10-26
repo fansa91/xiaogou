@@ -1,4 +1,4 @@
-# 小狗记账 Kotlin 重写版：GitHub Actions 编译 APK（kotlin-rewrite 分支）
+# 小狗记账 Kotlin 重写版：GitHub Actions 编译 APK（main 分支）
 #
 # 技术栈：AGP 8.5.2 / Gradle 8.7 / Kotlin 2.0.21 / compileSdk 34 / minSdk 21 / targetSdk 34
 # 全部依赖走 Maven，不再有旧版的 R 转换、q0 占位修复等步骤。
@@ -15,7 +15,7 @@ name: Build APK
 
 on:
   push:
-    branches: [kotlin-rewrite]
+    branches: [main]
   workflow_dispatch:
 
 jobs:

@@ -2,6 +2,7 @@ package com.xiaogou.bookkeeping.ui.phase2
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,9 +32,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xiaogou.bookkeeping.data.Settings
 import com.xiaogou.bookkeeping.domain.centsToYuan
@@ -267,7 +270,10 @@ fun ReimburseAddScreen(factory: AppViewModelFactory, onDone: () -> Unit) {
     }
 }
 
-// ---------- 统计进阶：历史趋势 + 全部类型 + 子类型 ----------
+// ---------- 统计：区块列表（fragment_statistics 口径） ----------
+// 不是一张图，而是一列区块：饼图+排行、柱状图、折线图、全部类型。
+// 饼图 120dp 环形（外 60 / 内 20），柱状/折线 118dp、底部 18dp 轴区；
+// 柱状与折线都有支出/收入切换（源码里两个容器叠在同一位置，点切换只显示其一）。
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatisticsAdvancedScreen(factory: AppViewModelFactory, onSubtype: (Long) -> Unit) {
@@ -276,33 +282,90 @@ fun StatisticsAdvancedScreen(factory: AppViewModelFactory, onSubtype: (Long) -> 
     val records by vm.recentRecords.collectAsState(initial = emptyList())
     val types by homeVm.types.collectAsState()
     val typeById = types.associateBy { it.id }
+    var histIncome by remember { mutableStateOf(false) }
+    var curveIncome by remember { mutableStateOf(false) }
+    val pieColors = listOf(
+        androidx.compose.ui.graphics.Color(0xFFFEAD23),
+        androidx.compose.ui.graphics.Color(0xFF0F9D58),
+        androidx.compose.ui.graphics.Color(0xFFFE2542),
+        androidx.compose.ui.graphics.Color(0xFF2581FE),
+        androidx.compose.ui.graphics.Color(0xFF65C3AC),
+    )
     // 按年月分组：yyyy-MM → 支出/收入
     val byMonth = records.groupBy {
         val cal = java.util.Calendar.getInstance().apply { timeInMillis = it.time ?: 0 }
         "%04d-%02d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1)
     }.toSortedMap()
-    Scaffold(topBar = { TopAppBar(title = { Text("统计进阶") }) }) { padding ->
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val monthKeys = byMonth.keys.toList()
+    val monthExpense = monthKeys.map { k ->
+        byMonth[k]?.filter { typeById[it.recordTypeId]?.type != 1 }?.sumOf { it.money ?: 0 } ?: 0L
+    }
+    val monthIncome = monthKeys.map { k ->
+        byMonth[k]?.filter { typeById[it.recordTypeId]?.type == 1 }?.sumOf { it.money ?: 0 } ?: 0L
+    }
+    val thisMonth = "%04d%02d".format(
+        java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
+        java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1,
+    )
+    val monthSums = records.filter {
+        val cal = java.util.Calendar.getInstance().apply { timeInMillis = it.time ?: 0 }
+        "%04d%02d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1) == thisMonth
+    }.groupBy { it.recordTypeId }.map { (id, list) ->
+        (typeById[id]?.name ?: "") to list.sumOf { it.money ?: 0 }
+    }.filter { it.second > 0 }
+    val monthTotal = monthSums.sumOf { it.second }.takeIf { it > 0 } ?: 1L
+    Scaffold(topBar = { TopAppBar(title = { Text("统计") }) }) { padding ->
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(30.dp)) {
             item {
-                Text("本月支出占比")
-                val monthSums = records.filter {
-                    val cal = java.util.Calendar.getInstance().apply { timeInMillis = it.time ?: 0 }
-                    "%04d%02d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1) ==
-                        "%04d%02d".format(java.util.Calendar.getInstance().get(java.util.Calendar.YEAR), java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1)
-                }.groupBy { it.recordTypeId }.map { (id, list) ->
-                    (typeById[id]?.name ?: "") to list.sumOf { it.money ?: 0 }
-                }.filter { it.second > 0 }
-                if (monthSums.isNotEmpty()) {
-                    PieChart(
-                        values = monthSums,
-                        colors = listOf(
-                            androidx.compose.ui.graphics.Color(0xFFFEAD23),
-                            androidx.compose.ui.graphics.Color(0xFF0F9D58),
-                            androidx.compose.ui.graphics.Color(0xFFFE2542),
-                            androidx.compose.ui.graphics.Color(0xFF2581FE),
-                            androidx.compose.ui.graphics.Color(0xFF65C3AC),
-                        ),
+                com.xiaogou.bookkeeping.ui.theme.StatisticsBlockHeader("分类占比")
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                    if (monthSums.isNotEmpty()) {
+                        PieChart(values = monthSums, colors = pieColors)
+                        Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
+                            monthSums.forEachIndexed { i, (name, v) ->
+                                Text("$name ${v * 100 / monthTotal}% · ${centsToYuan(v)}")
+                            }
+                        }
+                    } else {
+                        Text("本月暂无记录")
+                    }
+                }
+                monthSums.forEach { (name, v) ->
+                    com.xiaogou.bookkeeping.ui.theme.RankRow(name = name, value = v, total = monthTotal, label = centsToYuan(v))
+                }
+            }
+            item {
+                com.xiaogou.bookkeeping.ui.theme.StatisticsBlockHeader("收支柱状")
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { histIncome = false }) { Text("支出") }
+                    OutlinedButton(onClick = { histIncome = true }) { Text("收入") }
+                }
+                if (monthKeys.isNotEmpty()) {
+                    com.xiaogou.bookkeeping.ui.theme.HistBarChart(
+                        values = if (histIncome) monthIncome else monthExpense,
+                        color = if (histIncome) androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                        else androidx.compose.material3.MaterialTheme.colorScheme.primary,
                     )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        monthKeys.forEach { Text(it.takeLast(2), fontSize = 12.sp) }
+                    }
+                } else {
+                    Text("暂无趋势数据")
+                }
+            }
+            item {
+                com.xiaogou.bookkeeping.ui.theme.StatisticsBlockHeader("收支曲线")
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { curveIncome = false }) { Text("支出") }
+                    OutlinedButton(onClick = { curveIncome = true }) { Text("收入") }
+                }
+                if (monthKeys.size >= 2) {
+                    com.xiaogou.bookkeeping.ui.theme.CurveChart(
+                        values = if (curveIncome) monthIncome else monthExpense,
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                    )
+                } else {
+                    Text("至少 2 个月才有曲线")
                 }
             }
             item { Text("最近 6 个月趋势") }
@@ -357,34 +420,106 @@ fun SubtypeScreen(factory: AppViewModelFactory, parentId: Long) {
 }
 
 // ---------- 设置与应用锁 ----------
+// 源码骨架（setting_item_* 口径）：每行先是一条 1dp 分割线（左缩进 50dp，
+// 上下各 8dp），再是 40dp 深色圆角图标位 + 标题 + 12sp 副标题 + 右侧控件。
+// 主题在行内直接选（setting_item_theme：一行 5 个 40dp 色点）；
+// 夜间模式是弹窗三选（dialog_dark_mode：白天 / 夜间 / 跟随系统）。
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(settings: Settings, onBudget: () -> Unit, onRecurring: () -> Unit, onReimburse: () -> Unit, onStatistics: () -> Unit, onLockSetup: () -> Unit) {
+fun SettingsScreen(
+    settings: Settings,
+    themeKey: String = "theme_yellow",
+    nightOption: Int = 0,
+    onThemeChange: (String) -> Unit = {},
+    onNightOptionChange: (Int) -> Unit = {},
+    onBudget: () -> Unit,
+    onRecurring: () -> Unit,
+    onReimburse: () -> Unit,
+    onStatistics: () -> Unit,
+    onLockSetup: () -> Unit,
+) {
     var lockOn by remember { mutableStateOf(settings.lockEnabled) }
+    var showNightDialog by remember { mutableStateOf(false) }
+    val themeLabel = com.xiaogou.bookkeeping.ui.theme.WalkThemeId.fromKey(themeKey).label
     Scaffold(topBar = { TopAppBar(title = { Text("设置") }) }) { padding ->
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
             item {
-                SettingsRow(icon = { Text("预") }, title = "预算", onClick = onBudget)
-                SettingsRow(icon = { Text("周") }, title = "周期记账", onClick = onRecurring)
-                SettingsRow(icon = { Text("报") }, title = "报销", onClick = onReimburse)
-                SettingsRow(icon = { Text("统") }, title = "统计进阶", onClick = onStatistics)
+                // banner_setting 口径：标题区固定 166dp 高，只放 32sp 大标题。
+                Box(modifier = Modifier.fillMaxWidth().height(166.dp), contentAlignment = Alignment.TopStart) {
+                    Text("设置", fontSize = 32.sp, modifier = Modifier.padding(top = 10.dp))
+                }
             }
             item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("应用锁（PIN）")
-                    Switch(checked = lockOn, onCheckedChange = {
+                SettingsRow(icon = { Text("色") }, title = "主题颜色", subtitle = themeLabel, onClick = {})
+                com.xiaogou.bookkeeping.ui.theme.ThemeColorPicker(selectedKey = themeKey, onSelect = onThemeChange)
+                SettingsRow(
+                    icon = { Text("夜") },
+                    title = "夜间模式",
+                    subtitle = com.xiaogou.bookkeeping.ui.theme.NightMode.labels.getOrElse(nightOption) { "跟随系统" },
+                    onClick = { showNightDialog = true },
+                )
+            }
+            item {
+                SettingsRow(icon = { Text("预") }, title = "预算", subtitle = "本月预算与提醒", onClick = onBudget)
+                SettingsRow(icon = { Text("周") }, title = "周期记账", subtitle = "每天 / 每周 / 每月 / 每年自动记", onClick = onRecurring)
+                SettingsRow(icon = { Text("报") }, title = "报销", subtitle = "待报销与已报销", onClick = onReimburse)
+                SettingsRow(icon = { Text("统") }, title = "统计", subtitle = "分类占比、柱状、曲线", onClick = onStatistics)
+            }
+            item {
+                com.xiaogou.bookkeeping.ui.theme.SettingsSwitchRow(
+                    icon = { Text("锁") },
+                    title = "应用锁（PIN）",
+                    subtitle = "开启后每次打开应用需输入 PIN",
+                    checked = lockOn,
+                    onCheckedChange = {
                         if (it && settings.pinHash.isNullOrBlank()) {
                             onLockSetup()
                         } else {
                             lockOn = it
                             settings.lockEnabled = it
                         }
-                    })
-                }
-                Button(onClick = onLockSetup, modifier = Modifier.fillMaxWidth()) { Text("设置 / 修改 PIN") }
-                Text("开启后每次打开应用需输入 PIN；失败超过 3 次会提示。PIN 只存 SHA-256 哈希，不存明文。")
+                    },
+                )
+                Button(onClick = onLockSetup, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("设置 / 修改 PIN") }
+                Text(
+                    "开启后每次打开应用需输入 PIN；失败超过 3 次会提示。PIN 只存 SHA-256 哈希，不存明文。",
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         }
+    }
+    if (showNightDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showNightDialog = false },
+            title = { Text("夜间模式") },
+            text = {
+                Column {
+                    com.xiaogou.bookkeeping.ui.theme.NightMode.labels.forEachIndexed { i, label ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                onNightOptionChange(i)
+                                showNightDialog = false
+                            }.padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            androidx.compose.material3.RadioButton(
+                                selected = nightOption == i,
+                                onClick = {
+                                    onNightOptionChange(i)
+                                    showNightDialog = false
+                                },
+                            )
+                            Text(label, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showNightDialog = false }) { Text("取消") }
+            },
+        )
     }
 }
 

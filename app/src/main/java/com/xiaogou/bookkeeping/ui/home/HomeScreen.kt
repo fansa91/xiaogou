@@ -14,14 +14,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.ContentScale
@@ -35,18 +36,106 @@ import com.xiaogou.bookkeeping.domain.centsToYuan
 import com.xiaogou.bookkeeping.domain.formatDate
 import com.xiaogou.bookkeeping.domain.formatMonth
 import com.xiaogou.bookkeeping.ui.AppViewModelFactory
+import com.xiaogou.bookkeeping.ui.BudgetViewModel
 import com.xiaogou.bookkeeping.ui.HomeViewModel
 import com.xiaogou.bookkeeping.ui.theme.FloatingBottomBar
-import com.xiaogou.bookkeeping.ui.theme.WalkDimens
 
 /**
- * 首页布局：
- * - 顶部标题“记账”，左栏本月支出 + 结余，右栏本月收入；
- *   背景 img_banner 透明度 0.07。
- * - 底部悬浮 tab 条（见 FloatingBottomBar）。
- * - 顶部右侧悬浮预算按钮，点进预算页。
+ * 首页（banner_record 口径）：
+ * - 顶部不是系统 Toolbar，而是 banner 本身：32sp 大标题“记账”，
+ *   左列本月支出（28sp 主题色）+ 第二行结余（16sp + 14dp 图标），
+ *   右列本月收入（28sp）。背景 img_banner 透明度 0.07，顶部留 62dp。
+ * - 右上角悬浮预算按钮：32dp 图标位 + 60×24dp 进度条（8dp 圆角）
+ *   + 10sp 半透明百分比标签，进度取本月第一个预算的已用占比。
+ * - 记录按天分组：先是日期头（年-月-日 + 当天合计），下面是该天记录，
+ *   点分类合计进分类明细，点记录行可删除（与之前一致）。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun WalkBanner(
+    title: String,
+    leftTitle: String,
+    leftValue: String,
+    leftSecond: String,
+    rightTitle: String,
+    rightValue: String,
+    budgetProgress: Float = 0f,
+    budgetLabel: String = "预算",
+    onBudget: (() -> Unit)? = null,
+    leftIconRes: Int = R.drawable.icon_expense,
+    rightIconRes: Int = R.drawable.icon_income,
+) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Image(
+            painter = painterResource(R.drawable.img_banner),
+            contentDescription = null,
+            modifier = Modifier.fillMaxWidth().alpha(0.07f),
+            contentScale = ContentScale.Crop,
+        )
+        Column(modifier = Modifier.fillMaxWidth().padding(top = 62.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(title, fontSize = 32.sp)
+                if (onBudget != null) {
+                    Button(onClick = onBudget) {
+                        Image(
+                            painter = painterResource(R.drawable.icon_budget),
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp),
+                        )
+                        Box(modifier = Modifier.size(60.dp, 24.dp), contentAlignment = Alignment.Center) {
+                            LinearProgressIndicator(
+                                progress = { budgetProgress.coerceIn(0f, 1f) },
+                                modifier = Modifier.size(60.dp, 24.dp),
+                            )
+                            Text(budgetLabel, fontSize = 10.sp, modifier = Modifier.alpha(0.7f))
+                        }
+                    }
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp, start = 16.dp, end = 16.dp)) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(leftTitle, fontSize = 16.sp)
+                        Image(
+                            painter = painterResource(leftIconRes),
+                            contentDescription = null,
+                            modifier = Modifier.padding(start = 2.dp).size(16.dp),
+                        )
+                    }
+                    Text(
+                        leftValue,
+                        fontSize = 28.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                    Row(modifier = Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(leftSecond, fontSize = 16.sp)
+                        Image(
+                            painter = painterResource(R.drawable.icon_balance),
+                            contentDescription = null,
+                            modifier = Modifier.padding(start = 2.dp).size(14.dp),
+                        )
+                    }
+                }
+                Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(rightTitle, fontSize = 16.sp)
+                        Image(
+                            painter = painterResource(rightIconRes),
+                            contentDescription = null,
+                            modifier = Modifier.padding(start = 2.dp).size(16.dp),
+                        )
+                    }
+                    Text(rightValue, fontSize = 28.sp, modifier = Modifier.padding(top = 10.dp))
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun HomeScreen(
     factory: AppViewModelFactory,
@@ -60,15 +149,24 @@ fun HomeScreen(
     onSettings: () -> Unit,
 ) {
     val vm: HomeViewModel = viewModel(factory = factory)
+    val budgetVm: BudgetViewModel = viewModel(factory = factory)
     val yearMonth by vm.yearMonth.collectAsState()
     val records by vm.records.collectAsState()
     val sums by vm.sums.collectAsState()
     val types by vm.types.collectAsState()
     val summary by vm.summary.collectAsState()
+    val budgets by budgetVm.budgets.collectAsState()
     val typeById = types.associateBy { it.id }
+    val spentByType = sums.associate { it.recordTypeId to it.total }
+    val firstBudget = budgets.firstOrNull()
+    val budgetProgress = if (firstBudget != null && firstBudget.money > 0) {
+        (spentByType[firstBudget.recordTypeId] ?: 0L).toFloat() / firstBudget.money.toFloat()
+    } else 0f
+    val budgetLabel = if (firstBudget != null) "${(budgetProgress * 100).toInt()}%" else "预算"
+    // 按天分组：yyyy-MM-dd → 当天记录（时间倒序，数据库已按时间排）
+    val byDay = records.groupBy { formatDate(it.time).take(10) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("小狗记账") }) },
         bottomBar = {
             FloatingBottomBar(
                 tabs = listOf("首页" to {}, "资产" to onAssets, "统计" to onStatistics, "设置" to onSettings),
@@ -77,82 +175,43 @@ fun HomeScreen(
         },
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).padding(bottom = 92.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                // banner_record + img_banner 背景
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Image(
-                        painter = painterResource(R.drawable.img_banner),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxWidth().alpha(0.07f),
-                        contentScale = ContentScale.Crop,
-                    )
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("记账")
-                            // 悬浮预算按钮：32dp 图标位 + 60×24dp 进度条 + 10sp 标签
-                            Button(onClick = onBudget) {
-                                androidx.compose.foundation.layout.Box(
-                                    modifier = Modifier.size(32.dp),
-                                    contentAlignment = androidx.compose.ui.Alignment.Center,
-                                ) {
-                                    Image(painter = painterResource(R.drawable.icon_budget), contentDescription = null)
-                                }
-                                Column {
-                                    androidx.compose.material3.LinearProgressIndicator(
-                                        progress = { 0f },
-                                        modifier = Modifier.size(60.dp, 24.dp),
-                                    )
-                                    Text("预算", fontSize = 10.sp)
-                                }
-                            }
-                        }
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row {
-                                    Text("本月支出")
-                                    Image(painter = painterResource(R.drawable.icon_expense), contentDescription = null, modifier = Modifier.padding(start = 4.dp))
-                                }
-                                Text(centsToYuan(summary.expenseCents))
-                                Row {
-                                    Text(centsToYuan(summary.totalAssetsCents))
-                                    Image(painter = painterResource(R.drawable.icon_balance), contentDescription = null, modifier = Modifier.padding(start = 4.dp))
-                                }
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row {
-                                    Text("本月收入")
-                                    Image(painter = painterResource(R.drawable.icon_income), contentDescription = null, modifier = Modifier.padding(start = 4.dp))
-                                }
-                                Text(centsToYuan(summary.incomeCents))
-                            }
-                        }
-                    }
-                }
+                WalkBanner(
+                    title = "记账",
+                    leftTitle = "支出",
+                    leftValue = centsToYuan(summary.expenseCents),
+                    leftSecond = centsToYuan(summary.totalAssetsCents),
+                    rightTitle = "收入",
+                    rightValue = centsToYuan(summary.incomeCents),
+                    budgetProgress = budgetProgress,
+                    budgetLabel = budgetLabel,
+                    onBudget = onBudget,
+                )
             }
             item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = { vm.prevMonth() }) { Text("‹ 上月") }
                     Text(formatMonth(yearMonth.first, yearMonth.second))
                     TextButton(onClick = { vm.nextMonth() }) { Text("下月 ›") }
                 }
             }
             item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = onRecord, modifier = Modifier.weight(1f)) { Text("记一笔") }
                     Button(onClick = onTypes, modifier = Modifier.weight(1f)) { Text("分类") }
                     Button(onClick = onSearch, modifier = Modifier.weight(1f)) { Text("搜索") }
                 }
             }
             if (sums.isNotEmpty()) {
-                item { Text("按分类统计") }
+                item { Text("按分类统计", modifier = Modifier.padding(horizontal = 16.dp)) }
                 items(sums) { sum ->
                     val t = typeById[sum.recordTypeId]
                     if (t != null) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().clickable { onTypeDetail(t.id) }.padding(vertical = 4.dp),
+                            modifier = Modifier.fillMaxWidth().clickable { onTypeDetail(t.id) }.padding(horizontal = 16.dp, vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Text("${t.name}（${if (t.type == 1) "收入" else "支出"}）")
@@ -161,9 +220,20 @@ fun HomeScreen(
                     }
                 }
             }
-            item { Text("本月记录（${records.size} 条）") }
-            items(records) { record ->
-                RecordRow(record, typeById[record.recordTypeId]?.name ?: "", onDelete = { vm.deleteRecord(record) })
+            item { Text("本月记录（${records.size} 条）", modifier = Modifier.padding(horizontal = 16.dp)) }
+            byDay.forEach { (day, dayRecords) ->
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(day)
+                        Text("合计 ${centsToYuan(dayRecords.sumOf { it.money ?: 0 })}")
+                    }
+                }
+                items(dayRecords) { record ->
+                    RecordRow(record, typeById[record.recordTypeId]?.name ?: "", onDelete = { vm.deleteRecord(record) })
+                }
             }
         }
     }
@@ -171,7 +241,7 @@ fun HomeScreen(
 
 @Composable
 fun RecordRow(record: Record, typeName: String, onDelete: (() -> Unit)? = null) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -180,7 +250,7 @@ fun RecordRow(record: Record, typeName: String, onDelete: (() -> Unit)? = null) 
                 Text("$typeName · ${record.remark ?: ""}")
                 Text(formatDate(record.time))
             }
-            Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+            Column(horizontalAlignment = Alignment.End) {
                 Text(centsToYuan(record.money ?: 0))
                 if (onDelete != null) {
                     TextButton(onClick = onDelete) { Text("删除") }

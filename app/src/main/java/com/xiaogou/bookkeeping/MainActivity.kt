@@ -31,7 +31,14 @@ import com.xiaogou.bookkeeping.ui.phase2.SubtypeScreen
 import com.xiaogou.bookkeeping.ui.record.RecordAddScreen
 import com.xiaogou.bookkeeping.ui.search.SearchScreen
 import com.xiaogou.bookkeeping.ui.statistics.TypeDetailScreen
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.xiaogou.bookkeeping.ui.theme.NightMode
 import com.xiaogou.bookkeeping.ui.theme.WalkTheme
+import com.xiaogou.bookkeeping.ui.theme.WalkThemeId
 import com.xiaogou.bookkeeping.ui.type.TypeAddScreen
 import com.xiaogou.bookkeeping.ui.type.TypeManageScreen
 import com.xiaogou.bookkeeping.worker.scheduleDailyWork
@@ -55,7 +62,15 @@ class MainActivity : ComponentActivity() {
         scheduleDailyWork(applicationContext)
         val start = if (settings.lockEnabled && !settings.pinHash.isNullOrBlank()) "lock" else "home"
         setContent {
-            WalkTheme {
+            // 主题状态提升到 Activity：设置页换色 / 换夜间模式后整棵树立即生效。
+            var themeKey by remember { mutableStateOf(settings.themeKey) }
+            var nightOption by remember { mutableStateOf(settings.nightModeOption()) }
+            val darkTheme = when (nightOption) {
+                NightMode.DAY -> false
+                NightMode.NIGHT -> true
+                else -> isSystemInDarkTheme()
+            }
+            WalkTheme(themeId = WalkThemeId.fromKey(themeKey), darkTheme = darkTheme) {
                 val nav = rememberNavController()
                 NavHost(navController = nav, startDestination = start) {
                     composable("lock") {
@@ -139,6 +154,16 @@ class MainActivity : ComponentActivity() {
                     composable("settings") {
                         SettingsScreen(
                             settings = settings,
+                            themeKey = themeKey,
+                            nightOption = nightOption,
+                            onThemeChange = { key ->
+                                settings.themeKey = key
+                                themeKey = key
+                            },
+                            onNightOptionChange = { option ->
+                                settings.setNightModeOption(option)
+                                nightOption = option
+                            },
                             onBudget = { nav.navigate("budget") },
                             onRecurring = { nav.navigate("recurring") },
                             onReimburse = { nav.navigate("reimburse") },
