@@ -217,6 +217,7 @@ class AppViewModelFactory(private val repo: BookkeepingRepository) : ViewModelPr
             modelClass.isAssignableFrom(RecurringViewModel::class.java) -> RecurringViewModel(repo) as T
             modelClass.isAssignableFrom(ReimburseViewModel::class.java) -> ReimburseViewModel(repo) as T
             modelClass.isAssignableFrom(StatisticsViewModel::class.java) -> StatisticsViewModel(repo) as T
+            modelClass.isAssignableFrom(ExportViewModel::class.java) -> ExportViewModel(repo) as T
             else -> throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
         }
     }

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_budget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#FFFFFF"
+    android:padding="12dp">
+    <TextView
+        android:id="@+id/widget_budget_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="本月预算"
+        android:textSize="16sp" />
+    <TextView
+        android:id="@+id/widget_budget_spent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="已用 0.00"
+        android:textSize="14sp" />
+    <TextView
+        android:id="@+id/widget_budget_remain"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="剩余 0.00"
+        android:textSize="14sp" />
+    <ProgressBar
+        android:id="@+id/widget_budget_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="100"
+        android:progress="0" />
+    <TextView
+        android:id="@+id/widget_budget_percent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0%"
+        android:textSize="14sp" />
+</LinearLayout>

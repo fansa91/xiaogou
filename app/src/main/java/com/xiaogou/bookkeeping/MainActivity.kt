@@ -56,6 +56,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
  * 每日任务在启动时调度一次（WorkManager，每日 09:00 前后）。
  */
 class MainActivity : androidx.fragment.app.FragmentActivity() {
+    override fun onResume() {
+        super.onResume()
+        // 回到前台时刷新小部件，桌面上的今日 / 预算 / 饼图跟上最新账本。
+        com.xiaogou.bookkeeping.ui.widget.refreshWidgets(this)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -63,6 +69,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         val repo = BookkeepingRepository(db)
         val factory = AppViewModelFactory(repo)
         val settings = Settings.from(applicationContext)
+        // 小部件点开时带 route（如 record_add），锁开启时仍先走锁，安全优先。
         // 通知权限（Android 13+）：预算 / 周期提醒要靠它，不申请就静默发不出。
         // 只在未授权时申请一次意图，系统弹窗由用户决定，拒绝也不影响记账。
         if (android.os.Build.VERSION.SDK_INT >= 33 &&
@@ -75,7 +82,15 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             )
         }
         scheduleDailyWork(applicationContext)
-        val start = if (settings.lockEnabled && !settings.pinHash.isNullOrBlank()) "lock" else "home"
+        val widgetRoute = intent?.getStringExtra("route")
+        val knownRoutes = setOf("home", "record_add", "assets", "budget", "statistics_adv")
+        val start = if (settings.lockEnabled && !settings.pinHash.isNullOrBlank()) {
+            "lock"
+        } else if (widgetRoute in knownRoutes) {
+            widgetRoute!!
+        } else {
+            "home"
+        }
         setContent {
             // 主题状态提升到 Activity：设置页换色 / 换夜间模式后整棵树立即生效。
             var themeKey by remember { mutableStateOf(settings.themeKey) }
@@ -230,6 +245,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 settings.statisticsPie = v
                                 statisticsPie = v
                             },
+                            factory = factory,
                         )
                     }
                     composable("lock_setup") {

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_pie_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="#FFFFFF"
+    android:padding="12dp">
+    <ImageView
+        android:id="@+id/widget_pie_image"
+        android:layout_width="110dp"
+        android:layout_height="110dp" />
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:paddingStart="8dp">
+        <TextView
+            android:id="@+id/widget_pie_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="本月支出占比"
+            android:textSize="16sp" />
+        <TextView android:id="@+id/widget_pie_row1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" />
+        <TextView android:id="@+id/widget_pie_row2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" />
+        <TextView android:id="@+id/widget_pie_row3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" />
+        <TextView android:id="@+id/widget_pie_row4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" />
+        <TextView android:id="@+id/widget_pie_row5" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="13sp" />
+    </LinearLayout>
+</LinearLayout>

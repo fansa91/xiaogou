@@ -20,6 +20,9 @@ interface RecordDao {
     @Query("SELECT * FROM `Record` WHERE time BETWEEN :start AND :end ORDER BY time DESC, id DESC")
     fun recordsInRange(start: Long, end: Long): Flow<List<Record>>
 
+    @Query("SELECT * FROM `Record` ORDER BY time DESC, id DESC")
+    fun allRecords(): Flow<List<Record>>
+
     @Query("SELECT * FROM `Record` WHERE record_type_id = :typeId AND time BETWEEN :start AND :end ORDER BY time DESC, id DESC")
     fun recordsByType(typeId: Long, start: Long, end: Long): Flow<List<Record>>
 

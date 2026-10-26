@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 账单 CSV 导出后经分享发送：文件只写缓存目录，不进相册 / 下载目录。 -->
+    <cache-path name="export" path="." />
+</paths>

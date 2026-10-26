@@ -624,12 +624,14 @@ fun SettingsScreen(
     onAssetsPieChange: (Boolean) -> Unit = {},
     statisticsPie: Boolean = true,
     onStatisticsPieChange: (Boolean) -> Unit = {},
+    factory: com.xiaogou.bookkeeping.ui.AppViewModelFactory? = null,
 ) {
     var lockOn by remember { mutableStateOf(settings.lockEnabled) }
     var showNightDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var showMonthDialog by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
     var monthInput by remember { mutableStateOf(monthBeginDay.toString()) }
     val themeLabel = com.xiaogou.bookkeeping.ui.theme.WalkThemeId.fromKey(themeKey).label
     Scaffold(topBar = { TopAppBar(title = { Text("设置") }) }) { padding ->
@@ -687,6 +689,9 @@ fun SettingsScreen(
                 )
             }
             item {
+                if (factory != null) {
+                    SettingsRow(icon = { Text("导") }, title = "账单导出", subtitle = "导出为 CSV 文件并发送", onClick = { showExportDialog = true })
+                }
                 SettingsRow(icon = { Text("关") }, title = "关于", subtitle = "小狗记账 0.1", onClick = { showAboutDialog = true })
                 SettingsRow(icon = { Text("私") }, title = "隐私政策", subtitle = "数据只存在本机", onClick = { showPrivacyDialog = true })
             }
@@ -799,6 +804,98 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showPrivacyDialog = false }) { Text("知道了") }
+            },
+        )
+    }
+    if (showExportDialog && factory != null) {
+        ExportDialog(factory = factory, onDismiss = { showExportDialog = false })
+    }
+}
+
+/**
+ * 账单导出弹窗（dialog_export_mode / dialog_export_time 口径）：
+ * 全部导出，或按起止日期导出；生成 CSV 写缓存后用系统分享发送，
+ * 文件本身不上传、不进相册。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExportDialog(factory: com.xiaogou.bookkeeping.ui.AppViewModelFactory, onDismiss: () -> Unit) {
+    val vm: com.xiaogou.bookkeeping.ui.ExportViewModel = viewModel(factory = factory)
+    val records by vm.allRecords.collectAsState()
+    val types by vm.types.collectAsState()
+    val assets by vm.assets.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var byTime by remember { mutableStateOf(false) }
+    var startMs by remember {
+        mutableStateOf(
+            java.util.Calendar.getInstance().apply { set(java.util.Calendar.DAY_OF_MONTH, 1) }.timeInMillis,
+        )
+    }
+    var endMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    var picking by remember { mutableStateOf<String?>(null) }
+    var result by remember { mutableStateOf<String?>(null) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("账单导出") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { byTime = false }) { Text("导出全部") }
+                    OutlinedButton(onClick = { byTime = true }) { Text("按时间导出") }
+                }
+                if (byTime) {
+                    OutlinedButton(onClick = { picking = "start" }, modifier = Modifier.fillMaxWidth()) {
+                        Text("开始 ${com.xiaogou.bookkeeping.domain.formatDate(startMs)}")
+                    }
+                    OutlinedButton(onClick = { picking = "end" }, modifier = Modifier.fillMaxWidth()) {
+                        Text("结束 ${com.xiaogou.bookkeeping.domain.formatDate(endMs)}")
+                    }
+                }
+                result?.let { Text(it) }
+                if (records.isEmpty()) Text("暂无可导出的账单。")
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val filtered = if (byTime) {
+                    records.filter { (it.time ?: 0) in startMs..endMs }
+                } else {
+                    records
+                }
+                if (filtered.isEmpty()) {
+                    result = "所选范围内没有账单。"
+                    return@Button
+                }
+                val csv = com.xiaogou.bookkeeping.domain.buildBillsCsv(
+                    filtered,
+                    types.associateBy { it.id },
+                    assets.associateBy { it.id },
+                )
+                val file = java.io.File(context.cacheDir, "xiaogou_bills.csv")
+                file.writeText(csv, Charsets.UTF_8)
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context, "${context.packageName}.fileprovider", file,
+                )
+                val share = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/csv"
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(android.content.Intent.createChooser(share, "发送账单 CSV"))
+                result = "已生成 ${filtered.size} 条，正在打开分享。"
+            }) { Text("导出并发送") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        },
+    )
+    picking?.let { which ->
+        com.xiaogou.bookkeeping.ui.record.CalendarPickerDialog(
+            initialMs = if (which == "start") startMs else endMs,
+            onDismiss = { picking = null },
+            onDatePicked = { dayMs ->
+                picking = null
+                if (which == "start") startMs = dayMs else endMs = dayMs
             },
         )
     }

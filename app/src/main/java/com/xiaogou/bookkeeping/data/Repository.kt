@@ -26,6 +26,7 @@ class BookkeepingRepository(private val db: AppDatabase) {
     fun recordsInRange(start: Long, end: Long) = db.recordDao().recordsInRange(start, end)
     fun recordsByType(typeId: Long, start: Long, end: Long) = db.recordDao().recordsByType(typeId, start, end)
     fun searchByRemark(query: String) = db.recordDao().searchByRemark(query)
+    fun allRecords() = db.recordDao().allRecords()
     fun searchByRemarkOrAsset(query: String) = db.recordDao().searchByRemarkOrAsset(query)
     fun sumsByType(start: Long, end: Long) = db.recordDao().sumsByType(start, end)
     fun allTypes(): Flow<List<RecordType>> = db.recordTypeDao().all()

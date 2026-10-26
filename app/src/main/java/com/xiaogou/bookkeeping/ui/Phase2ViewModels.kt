@@ -86,6 +86,15 @@ class ReimburseViewModel(private val repo: BookkeepingRepository) : ViewModel() 
     fun delete(item: Reimburse) = viewModelScope.launch { repo.deleteReimburse(item) }
 }
 
+class ExportViewModel(private val repo: BookkeepingRepository) : ViewModel() {
+    val allRecords = repo.allRecords()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val types = repo.allTypes()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val assets = repo.allAssets()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+}
+
 class StatisticsViewModel(private val repo: BookkeepingRepository) : ViewModel() {
     /** 最近 6 个月记录（Flow），界面按年月分组算收支，口径与首页当月一致。 */
     val recentRecords = run {
