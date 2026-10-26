@@ -35,6 +35,9 @@ interface RecordDao {
     @Insert
     suspend fun insert(record: Record): Long
 
+    @Update
+    suspend fun update(record: Record)
+
     @Delete
     suspend fun delete(record: Record)
 }
@@ -91,6 +94,9 @@ interface AssetsModifyDao {
 interface AssetsTransferDao {
     @Insert
     suspend fun insert(record: AssetsTransferRecord)
+
+    @Delete
+    suspend fun delete(record: AssetsTransferRecord)
 
     @Query("SELECT * FROM AssetsTransferRecord ORDER BY time DESC, id DESC LIMIT 200")
     fun all(): Flow<List<AssetsTransferRecord>>

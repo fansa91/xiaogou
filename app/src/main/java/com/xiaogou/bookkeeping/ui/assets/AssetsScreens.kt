@@ -65,6 +65,12 @@ fun AssetsScreen(factory: AppViewModelFactory, onAdd: () -> Unit, onDetail: (Lon
     val positive = assets.filter { it.money >= 0 }.sumOf { it.money }
     val negative = assets.filter { it.money < 0 }.sumOf { -it.money }
     val net = assets.sumOf { it.money }
+    var pieLiabilities by remember { mutableStateOf(false) }
+    val pieValues = if (pieLiabilities) {
+        assets.filter { it.money < 0 }.map { (it.name) to -it.money }
+    } else {
+        assets.filter { it.money >= 0 }.map { (it.name) to it.money }
+    }.filter { it.second > 0 }
     Scaffold(
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -100,6 +106,35 @@ fun AssetsScreen(factory: AppViewModelFactory, onAdd: () -> Unit, onDetail: (Lon
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("总额 ${centsToYuan(net)}")
                     Text("${assets.size} 个账户")
+                }
+            }
+            item {
+                // 资产饼图（assets_pie 口径）：资产 / 负债切换，120dp 环形饼 + 图例。
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { pieLiabilities = false }) { Text("资产") }
+                    OutlinedButton(onClick = { pieLiabilities = true }) { Text("负债") }
+                }
+                if (pieValues.isNotEmpty()) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        com.xiaogou.bookkeeping.ui.theme.PieChart(
+                            values = pieValues,
+                            colors = listOf(
+                                androidx.compose.ui.graphics.Color(0xFFFEAD23),
+                                androidx.compose.ui.graphics.Color(0xFF0F9D58),
+                                androidx.compose.ui.graphics.Color(0xFFFE2542),
+                                androidx.compose.ui.graphics.Color(0xFF2581FE),
+                                androidx.compose.ui.graphics.Color(0xFF65C3AC),
+                            ),
+                        )
+                        Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
+                            val total = pieValues.sumOf { it.second }.takeIf { it > 0 } ?: 1L
+                            pieValues.forEach { (name, v) ->
+                                Text("$name ${v * 100 / total}% · ${centsToYuan(v)}")
+                            }
+                        }
+                    }
+                } else {
+                    Text(if (pieLiabilities) "暂无负债账户" else "暂无资产账户", modifier = Modifier.padding(horizontal = 16.dp))
                 }
             }
             items(assets) { a ->

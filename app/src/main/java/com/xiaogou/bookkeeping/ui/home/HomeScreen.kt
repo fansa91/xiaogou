@@ -29,6 +29,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xiaogou.bookkeeping.R
 import com.xiaogou.bookkeeping.data.entity.Record
@@ -36,6 +41,7 @@ import com.xiaogou.bookkeeping.domain.centsToYuan
 import com.xiaogou.bookkeeping.domain.formatDate
 import com.xiaogou.bookkeeping.domain.formatMonth
 import com.xiaogou.bookkeeping.ui.AppViewModelFactory
+import com.xiaogou.bookkeeping.ui.AssetsViewModel
 import com.xiaogou.bookkeeping.ui.BudgetViewModel
 import com.xiaogou.bookkeeping.ui.HomeViewModel
 import com.xiaogou.bookkeeping.ui.theme.FloatingBottomBar
@@ -147,9 +153,15 @@ fun HomeScreen(
     onBudget: () -> Unit,
     onStatistics: () -> Unit,
     onSettings: () -> Unit,
+    onEditRecord: (Long) -> Unit = {},
 ) {
     val vm: HomeViewModel = viewModel(factory = factory)
     val budgetVm: BudgetViewModel = viewModel(factory = factory)
+    val assetsVm: AssetsViewModel = viewModel(factory = factory)
+    val transfers by assetsVm.transfers.collectAsState()
+    val assetsList by vm.assets.collectAsState()
+    val assetById = assetsList.associateBy { it.id }
+    var detailRecord by remember { mutableStateOf<Record?>(null) }
     val yearMonth by vm.yearMonth.collectAsState()
     val records by vm.records.collectAsState()
     val sums by vm.sums.collectAsState()
@@ -232,16 +244,68 @@ fun HomeScreen(
                     }
                 }
                 items(dayRecords) { record ->
-                    RecordRow(record, typeById[record.recordTypeId]?.name ?: "", onDelete = { vm.deleteRecord(record) })
+                    RecordRow(
+                        record, typeById[record.recordTypeId]?.name ?: "",
+                        onDelete = { vm.deleteRecord(record) },
+                        onClick = { detailRecord = record },
+                    )
+                }
+            }
+            if (transfers.isNotEmpty()) {
+                item { Text("转账记录（${transfers.size} 条）", modifier = Modifier.padding(horizontal = 16.dp)) }
+                items(transfers) { t ->
+                    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("${assetById[t.assetsIdForm]?.name ?: ""} → ${assetById[t.assetsIdTo]?.name ?: ""}")
+                                Text("${t.remark} · ${formatDate(t.time)}")
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(centsToYuan(t.money))
+                                TextButton(onClick = { assetsVm.deleteTransfer(t) }) { Text("删除") }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
+    // 记录详情弹窗（源码 dialog_record_content 口径）：分类 / 金额 / 账户 /
+    // 备注 / 时间，点编辑进编辑页，点删除直接删。
+    detailRecord?.let { r ->
+        AlertDialog(
+            onDismissRequest = { detailRecord = null },
+            title = { Text(typeById[r.recordTypeId]?.name ?: "记录详情") },
+            text = {
+                Column {
+                    Text("金额 ${centsToYuan(r.money ?: 0)}")
+                    Text("账户 ${assetById[r.assetsId]?.name ?: "不计入账户"}")
+                    Text("备注 ${r.remark ?: ""}")
+                    Text("时间 ${formatDate(r.time)}")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { detailRecord = null; onEditRecord(r.id) }) { Text("编辑") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { vm.deleteRecord(r); detailRecord = null }) { Text("删除") }
+                    TextButton(onClick = { detailRecord = null }) { Text("关闭") }
+                }
+            },
+        )
+    }
 }
 
 @Composable
-fun RecordRow(record: Record, typeName: String, onDelete: (() -> Unit)? = null) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+fun RecordRow(record: Record, typeName: String, onDelete: (() -> Unit)? = null, onClick: (() -> Unit)? = null) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+            .let { if (onClick != null) it.clickable { onClick() } else it },
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,

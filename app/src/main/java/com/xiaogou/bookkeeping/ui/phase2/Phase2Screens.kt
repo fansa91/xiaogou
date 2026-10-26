@@ -276,7 +276,12 @@ fun ReimburseAddScreen(factory: AppViewModelFactory, onDone: () -> Unit) {
 // 柱状与折线都有支出/收入切换（源码里两个容器叠在同一位置，点切换只显示其一）。
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StatisticsAdvancedScreen(factory: AppViewModelFactory, onSubtype: (Long) -> Unit) {
+fun StatisticsAdvancedScreen(
+    factory: AppViewModelFactory,
+    onSubtype: (Long) -> Unit,
+    onAllTypes: () -> Unit = {},
+    onHist: () -> Unit = {},
+) {
     val vm: StatisticsViewModel = viewModel(factory = factory)
     val homeVm: HomeViewModel = viewModel(factory = factory)
     val records by vm.recentRecords.collectAsState(initial = emptyList())
@@ -284,6 +289,16 @@ fun StatisticsAdvancedScreen(factory: AppViewModelFactory, onSubtype: (Long) -> 
     val typeById = types.associateBy { it.id }
     var histIncome by remember { mutableStateOf(false) }
     var curveIncome by remember { mutableStateOf(false) }
+    var showRankSheet by remember { mutableStateOf(false) }
+    // 年月选择器：默认当月，可前后翻月；饼图按所选月份算，不再只算当月。
+    val nowCal = java.util.Calendar.getInstance()
+    var selYear by remember { mutableStateOf(nowCal.get(java.util.Calendar.YEAR)) }
+    var selMonth by remember { mutableStateOf(nowCal.get(java.util.Calendar.MONTH)) }
+    fun shiftMonth(delta: Int) {
+        val cal = java.util.Calendar.getInstance().apply { set(selYear, selMonth, 1); add(java.util.Calendar.MONTH, delta) }
+        selYear = cal.get(java.util.Calendar.YEAR)
+        selMonth = cal.get(java.util.Calendar.MONTH)
+    }
     val pieColors = listOf(
         androidx.compose.ui.graphics.Color(0xFFFEAD23),
         androidx.compose.ui.graphics.Color(0xFF0F9D58),
@@ -303,10 +318,7 @@ fun StatisticsAdvancedScreen(factory: AppViewModelFactory, onSubtype: (Long) -> 
     val monthIncome = monthKeys.map { k ->
         byMonth[k]?.filter { typeById[it.recordTypeId]?.type == 1 }?.sumOf { it.money ?: 0 } ?: 0L
     }
-    val thisMonth = "%04d%02d".format(
-        java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
-        java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1,
-    )
+    val thisMonth = "%04d%02d".format(selYear, selMonth + 1)
     val monthSums = records.filter {
         val cal = java.util.Calendar.getInstance().apply { timeInMillis = it.time ?: 0 }
         "%04d%02d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1) == thisMonth
@@ -318,6 +330,11 @@ fun StatisticsAdvancedScreen(factory: AppViewModelFactory, onSubtype: (Long) -> 
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(30.dp)) {
             item {
                 com.xiaogou.bookkeeping.ui.theme.StatisticsBlockHeader("分类占比")
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(onClick = { shiftMonth(-1) }) { Text("‹ 上月") }
+                    Text("${selYear}年${selMonth + 1}月")
+                    TextButton(onClick = { shiftMonth(1) }) { Text("下月 ›") }
+                }
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
                     if (monthSums.isNotEmpty()) {
                         PieChart(values = monthSums, colors = pieColors)
@@ -327,15 +344,18 @@ fun StatisticsAdvancedScreen(factory: AppViewModelFactory, onSubtype: (Long) -> 
                             }
                         }
                     } else {
-                        Text("本月暂无记录")
+                        Text("所选月份暂无记录")
                     }
                 }
                 monthSums.forEach { (name, v) ->
                     com.xiaogou.bookkeeping.ui.theme.RankRow(name = name, value = v, total = monthTotal, label = centsToYuan(v))
                 }
+                Button(onClick = { showRankSheet = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    Text("查看排行（底部表）")
+                }
             }
             item {
-                com.xiaogou.bookkeeping.ui.theme.StatisticsBlockHeader("收支柱状")
+                com.xiaogou.bookkeeping.ui.theme.StatisticsBlockHeader("收支柱状", onMore = onHist)
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { histIncome = false }) { Text("支出") }
                     OutlinedButton(onClick = { histIncome = true }) { Text("收入") }
@@ -379,9 +399,79 @@ fun StatisticsAdvancedScreen(factory: AppViewModelFactory, onSubtype: (Long) -> 
                     Text("$month · 支出 ${centsToYuan(exp)} · 收入 ${centsToYuan(inc)}")
                 }
             }
-            item { Text("全部类型（点进子类型）") }
-            items(types.filter { it.parentId == -1L }) { t ->
-                Text(t.name ?: "", modifier = Modifier.fillMaxWidth().clickable { onSubtype(t.id) }.padding(8.dp))
+            item {
+                Button(onClick = onAllTypes, modifier = Modifier.fillMaxWidth()) { Text("全部类型（按支出 / 收入分组）") }
+            }
+        }
+    }
+    if (showRankSheet) {
+        androidx.compose.material3.ModalBottomSheet(onDismissRequest = { showRankSheet = false }) {
+            Column(modifier = Modifier.fillMaxWidth().padding(start = 30.dp, end = 30.dp, bottom = 30.dp)) {
+                Text("排行", fontSize = 20.sp, modifier = Modifier.padding(bottom = 8.dp))
+                monthSums.forEach { (name, v) ->
+                    com.xiaogou.bookkeeping.ui.theme.RankRow(name = name, value = v, total = monthTotal, label = centsToYuan(v))
+                }
+                if (monthSums.isEmpty()) Text("所选月份暂无记录")
+            }
+        }
+    }
+}
+
+// ---------- 全部类型（AllTypeActivity 口径）：支出 / 收入分组，点进子类型 ----------
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AllTypesScreen(factory: AppViewModelFactory, onSubtype: (Long) -> Unit) {
+    val homeVm: HomeViewModel = viewModel(factory = factory)
+    val types by homeVm.types.collectAsState()
+    Scaffold(topBar = { TopAppBar(title = { Text("全部类型") }) }) { padding ->
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            listOf(0 to "支出", 1 to "收入").forEach { (type, label) ->
+                item { Text(label, fontSize = 20.sp) }
+                items(types.filter { it.parentId == -1L && it.type == type }) { t ->
+                    Text(t.name ?: "", modifier = Modifier.fillMaxWidth().clickable { onSubtype(t.id) }.padding(8.dp))
+                }
+            }
+        }
+    }
+}
+
+// ---------- 柱状全屏页（StatisticsHistActivity 口径）：月份柱状 + 支出/收入切换 ----------
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StatisticsHistScreen(factory: AppViewModelFactory) {
+    val vm: StatisticsViewModel = viewModel(factory = factory)
+    val homeVm: HomeViewModel = viewModel(factory = factory)
+    val records by vm.recentRecords.collectAsState(initial = emptyList())
+    val types by homeVm.types.collectAsState()
+    val typeById = types.associateBy { it.id }
+    var histIncome by remember { mutableStateOf(false) }
+    val byMonth = records.groupBy {
+        val cal = java.util.Calendar.getInstance().apply { timeInMillis = it.time ?: 0 }
+        "%04d-%02d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1)
+    }.toSortedMap()
+    val monthKeys = byMonth.keys.toList()
+    val monthExpense = monthKeys.map { k ->
+        byMonth[k]?.filter { typeById[it.recordTypeId]?.type != 1 }?.sumOf { it.money ?: 0 } ?: 0L
+    }
+    val monthIncome = monthKeys.map { k ->
+        byMonth[k]?.filter { typeById[it.recordTypeId]?.type == 1 }?.sumOf { it.money ?: 0 } ?: 0L
+    }
+    Scaffold(topBar = { TopAppBar(title = { Text("收支柱状") }) }) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { histIncome = false }) { Text("支出") }
+                OutlinedButton(onClick = { histIncome = true }) { Text("收入") }
+            }
+            if (monthKeys.isNotEmpty()) {
+                com.xiaogou.bookkeeping.ui.theme.HistBarChart(
+                    values = if (histIncome) monthIncome else monthExpense,
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                )
+                monthKeys.forEachIndexed { i, k ->
+                    Text("$k · ${(if (histIncome) monthIncome else monthExpense)[i].let { centsToYuan(it) }}")
+                }
+            } else {
+                Text("暂无趋势数据")
             }
         }
     }

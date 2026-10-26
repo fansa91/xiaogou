@@ -32,15 +32,49 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.xiaogou.bookkeeping.domain.centsToYuan
+import com.xiaogou.bookkeeping.domain.formatDate
 import com.xiaogou.bookkeeping.domain.yuanToCents
 import com.xiaogou.bookkeeping.ui.AppViewModelFactory
 import com.xiaogou.bookkeeping.ui.RecordViewModel
 import com.xiaogou.bookkeeping.ui.theme.WalkDimens
 import java.math.BigDecimal
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
+/**
+ * 日期时间选择：系统日期弹窗 → 时间弹窗，两步选完回一个毫秒时间戳。
+ * 源码的日期 / 月份选择器（dialog_date_picker / dialog_month_picker /
+ * layout_calendar_*）在 Compose 里没有现成等价物，先用系统弹窗实现
+ * 同样的“改日期”能力，年月日时分都能改。
+ */
+fun showDateTimePicker(context: android.content.Context, initialMs: Long, onPick: (Long) -> Unit) {
+    val cal = Calendar.getInstance().apply { timeInMillis = initialMs }
+    DatePickerDialog(
+        context,
+        { _, y, m, d ->
+            TimePickerDialog(
+                context,
+                { _, h, min ->
+                    val picked = Calendar.getInstance().apply {
+                        set(y, m, d, h, min, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    onPick(picked.timeInMillis)
+                },
+                cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true,
+            ).show()
+        },
+        cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH),
+    ).show()
+}
 
 /**
  * 记账页布局：
@@ -68,6 +102,8 @@ fun RecordAddScreen(factory: AppViewModelFactory, onDone: () -> Unit, onBack: ()
     var reimburse by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var assetsMenu by remember { mutableStateOf(false) }
+    var recordTimeMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    val context = LocalContext.current
 
     if (selectedTypeId == null && types.isNotEmpty()) selectedTypeId = types.first().id
     val today = remember { SimpleDateFormat("今天 MM月dd日", Locale.CHINA).format(Date()) }
@@ -121,7 +157,7 @@ fun RecordAddScreen(factory: AppViewModelFactory, onDone: () -> Unit, onBack: ()
         when {
             cents == null || cents <= 0 -> error = "请用下方键盘输入大于 0 的金额"
             typeId == null -> error = "请先选择分类"
-            else -> vm.save(cents, typeId, if (isIncome) 1 else 0, selectedAssetsId, remark, reimburse) {
+            else -> vm.save(cents, typeId, if (isIncome) 1 else 0, selectedAssetsId, remark, reimburse, recordTimeMs) {
                 if (again) {
                     amount = ""; pending = BigDecimal.ZERO; pendingOp = null; remark = ""; reimburse = false; error = null
                 } else onDone()
@@ -214,14 +250,103 @@ fun RecordAddScreen(factory: AppViewModelFactory, onDone: () -> Unit, onBack: ()
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(today)
+                OutlinedButton(onClick = { showDateTimePicker(context, recordTimeMs) { recordTimeMs = it } }) {
+                    Text(formatDate(recordTimeMs))
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("报销")
                     Switch(checked = reimburse, onCheckedChange = { reimburse = it })
                 }
                 OutlinedButton(onClick = { doSave(true) }) { Text("再记一笔") }
             }
+            Text(today, fontSize = 12.sp)
             OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("返回") }
+        }
+    }
+}
+
+/**
+ * 编辑记录（源码 dialog_record_content 的“改”能力）：
+ * 金额 / 分类（按原收支方向）/ 账户 / 备注 / 日期时间都能改，
+ * 保存时按旧记录反向冲回、按新值重新记账，余额不会双计。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RecordEditScreen(factory: AppViewModelFactory, recordId: Long, onDone: () -> Unit) {
+    val vm: RecordViewModel = viewModel(factory = factory)
+    val context = LocalContext.current
+    var old by remember { mutableStateOf<com.xiaogou.bookkeeping.data.entity.Record?>(null) }
+    var amount by remember { mutableStateOf("") }
+    var remark by remember { mutableStateOf("") }
+    var timeMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    var selectedTypeId by remember { mutableStateOf<Long?>(null) }
+    var selectedAssetsId by remember { mutableStateOf<Long?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var assetsMenu by remember { mutableStateOf(false) }
+    var loaded by remember { mutableStateOf(false) }
+    val types by vm.allTypes().collectAsState(initial = emptyList())
+    val assets by vm.assets().collectAsState(initial = emptyList())
+
+    LaunchedEffect(recordId) {
+        val r = vm.getRecord(recordId)
+        old = r
+        if (r != null && !loaded) {
+            amount = centsToYuan(r.money ?: 0L)
+            remark = r.remark ?: ""
+            timeMs = r.time ?: System.currentTimeMillis()
+            selectedTypeId = r.recordTypeId
+            selectedAssetsId = r.assetsId
+            loaded = true
+        }
+    }
+    val oldType = types.firstOrNull { it.id == old?.recordTypeId }?.type ?: 0
+    val typeOptions = types.filter { it.type == oldType && it.state == 1 }
+
+    Scaffold(topBar = { TopAppBar(title = { Text("编辑记录") }) }) { padding ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)
+                .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (old == null) {
+                Text("记录不存在")
+            } else {
+                Text(if (oldType == 1) "收入" else "支出")
+                OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("金额（元）") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedButton(onClick = { assetsMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(assets.firstOrNull { it.id == selectedAssetsId }?.name ?: "不计入账户（可选）")
+                }
+                DropdownMenu(expanded = assetsMenu, onDismissRequest = { assetsMenu = false }) {
+                    DropdownMenuItem(text = { Text("不计入账户") }, onClick = { selectedAssetsId = null; assetsMenu = false })
+                    assets.forEach { a ->
+                        DropdownMenuItem(text = { Text(a.name) }, onClick = { selectedAssetsId = a.id; assetsMenu = false })
+                    }
+                }
+                Text("分类")
+                typeOptions.forEach { t ->
+                    FilterChip(
+                        selected = selectedTypeId == t.id,
+                        onClick = { selectedTypeId = t.id },
+                        label = { Text(t.name ?: "") },
+                    )
+                }
+                OutlinedTextField(value = remark, onValueChange = { remark = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedButton(onClick = { showDateTimePicker(context, timeMs) { timeMs = it } }, modifier = Modifier.fillMaxWidth()) {
+                    Text(formatDate(timeMs))
+                }
+                error?.let { Text(it) }
+                Button(onClick = {
+                    val cents = yuanToCents(amount)
+                    val tid = selectedTypeId
+                    val o = old
+                    when {
+                        o == null -> error = "记录不存在"
+                        cents == null || cents <= 0 -> error = "请填写大于 0 的金额"
+                        tid == null -> error = "请先选择分类"
+                        else -> vm.updateRecord(o, cents, tid, oldType, selectedAssetsId, remark, timeMs, onDone)
+                    }
+                }, modifier = Modifier.fillMaxWidth()) { Text("保存修改") }
+            }
         }
     }
 }

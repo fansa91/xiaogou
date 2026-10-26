@@ -79,15 +79,21 @@ class RecordViewModel(private val repo: BookkeepingRepository) : ViewModel() {
     fun expenseTypes(): Flow<List<RecordType>> = repo.enabledTypes(0)
     fun incomeTypes(): Flow<List<RecordType>> = repo.enabledTypes(1)
     fun assets(): Flow<List<Assets>> = repo.allAssets()
+    fun allTypes(): Flow<List<RecordType>> = repo.allTypes()
+    suspend fun getRecord(id: Long) = repo.getRecord(id)
 
     fun save(moneyCents: Long, typeId: Long, type: Int, assetsId: Long?, remark: String, onDone: () -> Unit) {
         save(moneyCents, typeId, type, assetsId, remark, reimburse = false, onDone)
     }
 
     fun save(moneyCents: Long, typeId: Long, type: Int, assetsId: Long?, remark: String, reimburse: Boolean, onDone: () -> Unit) {
+        save(moneyCents, typeId, type, assetsId, remark, reimburse, System.currentTimeMillis(), onDone)
+    }
+
+    fun save(moneyCents: Long, typeId: Long, type: Int, assetsId: Long?, remark: String, reimburse: Boolean, timeMs: Long, onDone: () -> Unit) {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
-            repo.addRecord(moneyCents, typeId, type, assetsId, remark, now)
+            repo.addRecord(moneyCents, typeId, type, assetsId, remark, timeMs)
             if (reimburse) {
                 repo.addReimburse(
                     com.xiaogou.bookkeeping.data.entity.Reimburse(
@@ -99,6 +105,13 @@ class RecordViewModel(private val repo: BookkeepingRepository) : ViewModel() {
             }
             onDone()
         }
+    }
+
+    fun updateRecord(
+        old: com.xiaogou.bookkeeping.data.entity.Record,
+        moneyCents: Long, typeId: Long, type: Int, assetsId: Long?, remark: String, timeMs: Long, onDone: () -> Unit,
+    ) {
+        viewModelScope.launch { repo.updateRecord(old, moneyCents, typeId, type, assetsId, remark, timeMs); onDone() }
     }
 }
 
@@ -114,6 +127,13 @@ class AssetsViewModel(private val repo: BookkeepingRepository) : ViewModel() {
 
     fun transfer(fromId: Long, toId: Long, moneyCents: Long, remark: String, onDone: () -> Unit) {
         viewModelScope.launch { repo.transfer(fromId, toId, moneyCents, remark); onDone() }
+    }
+
+    val transfers = repo.allTransfers()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun deleteTransfer(record: com.xiaogou.bookkeeping.data.entity.AssetsTransferRecord) {
+        viewModelScope.launch { repo.deleteTransfer(record) }
     }
 }
 

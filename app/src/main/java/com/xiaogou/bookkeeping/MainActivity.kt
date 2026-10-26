@@ -25,10 +25,13 @@ import com.xiaogou.bookkeeping.ui.phase2.RecurringAddScreen
 import com.xiaogou.bookkeeping.ui.phase2.RecurringScreen
 import com.xiaogou.bookkeeping.ui.phase2.ReimburseAddScreen
 import com.xiaogou.bookkeeping.ui.phase2.ReimburseScreen
+import com.xiaogou.bookkeeping.ui.phase2.AllTypesScreen
 import com.xiaogou.bookkeeping.ui.phase2.SettingsScreen
 import com.xiaogou.bookkeeping.ui.phase2.StatisticsAdvancedScreen
+import com.xiaogou.bookkeeping.ui.phase2.StatisticsHistScreen
 import com.xiaogou.bookkeeping.ui.phase2.SubtypeScreen
 import com.xiaogou.bookkeeping.ui.record.RecordAddScreen
+import com.xiaogou.bookkeeping.ui.record.RecordEditScreen
 import com.xiaogou.bookkeeping.ui.search.SearchScreen
 import com.xiaogou.bookkeeping.ui.statistics.TypeDetailScreen
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -89,10 +92,15 @@ class MainActivity : ComponentActivity() {
                             onBudget = { nav.navigate("budget") },
                             onStatistics = { nav.navigate("statistics_adv") },
                             onSettings = { nav.navigate("settings") },
+                            onEditRecord = { id -> nav.navigate("record_edit/$id") },
                         )
                     }
                     composable("record_add") {
                         RecordAddScreen(factory = factory, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
+                    }
+                    composable("record_edit/{id}") { backStack ->
+                        val id = backStack.arguments?.getString("id")?.toLongOrNull() ?: 0L
+                        RecordEditScreen(factory = factory, recordId = id, onDone = { nav.popBackStack() })
                     }
                     composable("assets") {
                         AssetsScreen(
@@ -145,7 +153,18 @@ class MainActivity : ComponentActivity() {
                         ReimburseAddScreen(factory = factory, onDone = { nav.popBackStack() })
                     }
                     composable("statistics_adv") {
-                        StatisticsAdvancedScreen(factory = factory, onSubtype = { id -> nav.navigate("subtype/$id") })
+                        StatisticsAdvancedScreen(
+                            factory = factory,
+                            onSubtype = { id -> nav.navigate("subtype/$id") },
+                            onAllTypes = { nav.navigate("all_types") },
+                            onHist = { nav.navigate("statistics_hist") },
+                        )
+                    }
+                    composable("all_types") {
+                        AllTypesScreen(factory = factory, onSubtype = { id -> nav.navigate("subtype/$id") })
+                    }
+                    composable("statistics_hist") {
+                        StatisticsHistScreen(factory = factory)
                     }
                     composable("subtype/{id}") { backStack ->
                         val id = backStack.arguments?.getString("id")?.toLongOrNull() ?: 0L

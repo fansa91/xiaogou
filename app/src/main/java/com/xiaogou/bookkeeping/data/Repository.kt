@@ -30,6 +30,7 @@ class BookkeepingRepository(private val db: AppDatabase) {
     fun allTypes(): Flow<List<RecordType>> = db.recordTypeDao().all()
     fun enabledTypes(type: Int): Flow<List<RecordType>> = db.recordTypeDao().enabledByType(type)
     fun allAssets(): Flow<List<Assets>> = db.assetsDao().all()
+    fun allTransfers() = db.assetsTransferDao().all()
     fun modifyRecords(assetsId: Long) = db.assetsModifyDao().byAssets(assetsId)
 
     suspend fun typeById(id: Long) = db.recordTypeDao().getById(id)
@@ -63,6 +64,51 @@ class BookkeepingRepository(private val db: AppDatabase) {
                     AssetsModifyRecord(assetsId = assetsId, money = after, moneyBefore = before, state = 1, createTime = now),
                 )
             }
+        }
+    }
+
+    suspend fun getRecord(id: Long) = db.recordDao().getById(id)
+
+    /**
+     * 编辑记录：先按旧记录反向冲回旧账户，再按新值重新记账，两步各写一条
+     * 变动记录；账户不变时余额净效果就是新旧金额之差，不会双计。
+     */
+    suspend fun updateRecord(old: Record, moneyCents: Long, typeId: Long, type: Int, assetsId: Long?, remark: String, timeMs: Long) {
+        db.withTransaction {
+            val now = System.currentTimeMillis()
+            val oldType = db.recordTypeDao().getById(old.recordTypeId)?.type ?: 0
+            val oldMoney = old.money ?: 0L
+            old.assetsId?.let { id ->
+                val a = db.assetsDao().getById(id) ?: return@let
+                val after = if (oldType == 0) a.money + oldMoney else a.money - oldMoney
+                db.assetsDao().updateMoney(id, after)
+                db.assetsModifyDao().insert(AssetsModifyRecord(assetsId = id, money = after, moneyBefore = a.money, state = 1, createTime = now))
+            }
+            db.recordDao().update(old.copy(money = moneyCents, recordTypeId = typeId, assetsId = assetsId, remark = remark, time = timeMs))
+            assetsId?.let { id ->
+                val a = db.assetsDao().getById(id) ?: return@let
+                val after = if (type == 0) a.money - moneyCents else a.money + moneyCents
+                db.assetsDao().updateMoney(id, after)
+                db.assetsModifyDao().insert(AssetsModifyRecord(assetsId = id, money = after, moneyBefore = a.money, state = 1, createTime = now))
+            }
+        }
+    }
+
+    /** 删除转账：转出加回、转入扣回，再删转账记录。 */
+    suspend fun deleteTransfer(record: AssetsTransferRecord) {
+        db.withTransaction {
+            val now = System.currentTimeMillis()
+            val from = db.assetsDao().getById(record.assetsIdForm)
+            val to = db.assetsDao().getById(record.assetsIdTo)
+            if (from != null) {
+                db.assetsDao().updateMoney(from.id, from.money + record.money)
+                db.assetsModifyDao().insert(AssetsModifyRecord(assetsId = from.id, money = from.money + record.money, moneyBefore = from.money, state = 1, createTime = now))
+            }
+            if (to != null) {
+                db.assetsDao().updateMoney(to.id, to.money - record.money)
+                db.assetsModifyDao().insert(AssetsModifyRecord(assetsId = to.id, money = to.money - record.money, moneyBefore = to.money, state = 1, createTime = now))
+            }
+            db.assetsTransferDao().delete(record)
         }
     }
 
