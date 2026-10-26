@@ -426,6 +426,11 @@ fun StatisticsAdvancedScreen(
                         values = if (curveIncome) monthIncome else monthExpense,
                         color = androidx.compose.material3.MaterialTheme.colorScheme.primary,
                     )
+                    // 曲线以前没有横轴，点对应哪个月只能猜；补上月份轴，
+                    // 与柱状图下面那行月份标签同一口径（取后两位）。
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        monthKeys.forEach { Text(it.takeLast(2), fontSize = 12.sp) }
+                    }
                 } else {
                     Text("至少 2 个月才有曲线")
                 }

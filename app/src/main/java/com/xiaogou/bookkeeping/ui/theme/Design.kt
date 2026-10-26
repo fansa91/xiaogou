@@ -259,7 +259,7 @@ fun HistBarChart(values: List<Long>, color: Color, modifier: Modifier = Modifier
     }
 }
 
-/** 折线图：118dp 高，点连线，首尾不贴边。 */
+/** 折线图：118dp 高，点连线 + 每个点画圆点，首尾不贴边。 */
 @Composable
 fun CurveChart(values: List<Long>, color: Color, modifier: Modifier = Modifier) {
     val max = (values.maxOrNull() ?: 0L).takeIf { it > 0 } ?: 1L
@@ -268,12 +268,17 @@ fun CurveChart(values: List<Long>, color: Color, modifier: Modifier = Modifier) 
     Canvas(modifier = modifier.fillMaxWidth().height(118.dp)) {
         if (values.size < 2) return@Canvas
         val path = Path()
-        values.forEachIndexed { i, v ->
+        val points = values.mapIndexed { i, v ->
             val x = size.width * i / (values.size - 1)
             val y = size.height - (size.height * 0.9f * (v - min) / range) - size.height * 0.05f
-            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            Offset(x, y)
+        }
+        points.forEachIndexed { i, p ->
+            if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
         }
         drawPath(path, color = color, style = Stroke(width = 2.dp.toPx()))
+        // 光一条线读不出每个月的值，点上画圆点，起码能数出点数和位置。
+        points.forEach { p -> drawCircle(color = color, radius = 3.dp.toPx(), center = p) }
     }
 }
 

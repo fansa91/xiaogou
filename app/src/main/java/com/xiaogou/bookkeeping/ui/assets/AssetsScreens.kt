@@ -328,7 +328,17 @@ fun AssetsDetailScreen(factory: AppViewModelFactory, assetsId: Long, onDeleted: 
                             }
                         }
                         if (curveModifies.size >= 2) {
-                            CurveChart(values = curveModifies.reversed().map { it.money }, color = MaterialTheme.colorScheme.primary)
+                            val chronological = curveModifies.reversed()
+                            CurveChart(values = chronological.map { it.money }, color = MaterialTheme.colorScheme.primary)
+                            // 曲线光一条线读不出数值，补起止两点：时间 + 余额，
+                            // 中间趋势看线，两头数值看这行。
+                            Text(
+                                "起点 ${formatDate(chronological.first().createTime)} · ${centsToYuan(chronological.first().money)}",
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                            Text(
+                                "终点 ${formatDate(chronological.last().createTime)} · ${centsToYuan(chronological.last().money)}",
+                            )
                         } else {
                             Text("所选范围内变动记录不足 2 条，暂不画曲线。")
                         }

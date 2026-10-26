@@ -240,6 +240,11 @@ fun RecordAddScreen(factory: AppViewModelFactory, onDone: () -> Unit, onBack: ()
     var assetsMenu by remember { mutableStateOf(false) }
     var recordTimeMs by remember { mutableStateOf(System.currentTimeMillis()) }
     var showCalendar by remember { mutableStateOf(false) }
+    // 备注改弹窗输入：以前备注是页面里的输入框，点它弹系统键盘，
+    // 会盖住下面的自定义数字键盘和保存键，页面本身又不可滚动；
+    // 弹窗里的输入框弹键盘时弹窗在上、键盘在下，互不遮挡。
+    var showRemarkDialog by remember { mutableStateOf(false) }
+    var remarkInput by remember { mutableStateOf("") }
     // 子类型选择：点大类时若有已启用的子类型，先弹子类型框（dialog_subtype_select 口径）。
     var subtypeParent by remember { mutableStateOf<com.xiaogou.bookkeeping.data.entity.RecordType?>(null) }
     val context = LocalContext.current
@@ -368,10 +373,31 @@ fun RecordAddScreen(factory: AppViewModelFactory, onDone: () -> Unit, onBack: ()
                     },
                 )
             }
-            OutlinedTextField(
-                value = remark, onValueChange = { remark = it }, label = { Text("备注") },
-                modifier = Modifier.fillMaxWidth(), singleLine = true,
-            )
+            OutlinedButton(
+                onClick = { remarkInput = remark; showRemarkDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (remark.isBlank()) "备注（可选，点此输入）" else "备注：$remark")
+            }
+            if (showRemarkDialog) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showRemarkDialog = false },
+                    title = { Text("备注") },
+                    text = {
+                        OutlinedTextField(
+                            value = remarkInput, onValueChange = { remarkInput = it },
+                            label = { Text("备注") },
+                            modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        )
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.Button(onClick = { remark = remarkInput; showRemarkDialog = false }) { Text("确定") }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = { showRemarkDialog = false }) { Text("取消") }
+                    },
+                )
+            }
             OutlinedButton(onClick = { assetsMenu = true }, modifier = Modifier.fillMaxWidth()) {
                 Text(assets.firstOrNull { it.id == selectedAssetsId }?.name ?: "不计入账户（可选）")
             }

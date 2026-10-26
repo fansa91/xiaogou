@@ -160,6 +160,7 @@ fun HomeScreen(
     val assetsList by vm.assets.collectAsState()
     val assetById = assetsList.associateBy { it.id }
     var detailRecord by remember { mutableStateOf<Record?>(null) }
+    var deletingRecord by remember { mutableStateOf<Record?>(null) }
     var deletingTransfer by remember { mutableStateOf<com.xiaogou.bookkeeping.data.entity.AssetsTransferRecord?>(null) }
     val yearMonth by vm.yearMonth.collectAsState()
     val records by vm.records.collectAsState()
@@ -241,7 +242,7 @@ fun HomeScreen(
                 items(dayRecords) { record ->
                     RecordRow(
                         record, typeById[record.recordTypeId]?.name ?: "",
-                        onDelete = { vm.deleteRecord(record) },
+                        onDelete = { deletingRecord = record },
                         onClick = { detailRecord = record },
                     )
                 }
@@ -267,6 +268,21 @@ fun HomeScreen(
                 }
             }
         }
+    }
+    // 删记录确认：以前列表行和详情弹窗都是点一下直接删，误删找不回；
+    // 现在统一先弹确认（转账删除本来就有确认，这里只是补齐记录一侧）。
+    deletingRecord?.let { r ->
+        AlertDialog(
+            onDismissRequest = { deletingRecord = null },
+            title = { Text("删除记录") },
+            text = { Text("确定删除这条记录吗？删除后对应账户余额会冲回。") },
+            confirmButton = {
+                TextButton(onClick = { vm.deleteRecord(r); deletingRecord = null }) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingRecord = null }) { Text("取消") }
+            },
+        )
     }
     deletingTransfer?.let { t ->
         AlertDialog(
@@ -300,7 +316,9 @@ fun HomeScreen(
             },
             dismissButton = {
                 Row {
-                    TextButton(onClick = { vm.deleteRecord(r); detailRecord = null }) { Text("删除") }
+                    // 详情里的删除也走同一个确认弹窗：先关详情，再弹确认，
+                    // 避免两个弹窗叠在一起。
+                    TextButton(onClick = { detailRecord = null; deletingRecord = r }) { Text("删除") }
                     TextButton(onClick = { detailRecord = null }) { Text("关闭") }
                 }
             },
