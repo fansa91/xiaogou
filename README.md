@@ -11,7 +11,7 @@
 | --- | --- |
 | 应用名称 | 小狗记账 |
 | 包名 | `com.xiaogou.bookkeeping` |
-| 版本 | `0.3`（versionCode 36） |
+| 版本 | `0.4`（versionCode 37） |
 | 运行环境 | minSdk 21 / targetSdk 34 / compileSdk 34 |
 | 构建 | AGP 8.5.2 / Gradle 8.7 / Kotlin 2.0.21，GitHub Actions 出包 |
 | 技术栈 | Kotlin、Jetpack Compose（Material3）、Room、WorkManager、Navigation |
