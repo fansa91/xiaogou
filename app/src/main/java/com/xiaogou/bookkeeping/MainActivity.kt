@@ -4,8 +4,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.xiaogou.bookkeeping.data.AppDatabase
 import com.xiaogou.bookkeeping.data.BookkeepingRepository
@@ -109,7 +113,37 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             }
             WalkTheme(themeId = WalkThemeId.fromKey(themeKey), darkTheme = darkTheme) {
                 val nav = rememberNavController()
-                NavHost(navController = nav, startDestination = start) {
+                // 底部悬浮栏提到 Activity 一层：只在 4 个主页面固定显示，
+                // 切 tab 不消失、不跟随内容滚动；记账、详情等子页面不显示，
+                // 免得盖住子页面的按钮和键盘。外层 Scaffold 的 padding 会
+                // 给主页面内容底部留出栏高，主页面不用再自己留 92dp。
+                val backStackEntry by nav.currentBackStackEntryAsState()
+                val currentRoute = backStackEntry?.destination?.route
+                val mainTabs = listOf("home", "assets", "statistics_adv", "settings")
+                val currentTab = mainTabs.indexOf(currentRoute)
+                fun goTab(route: String) {
+                    nav.navigate(route) {
+                        popUpTo("home") { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+                Scaffold(
+                    bottomBar = {
+                        if (currentTab >= 0) {
+                            com.xiaogou.bookkeeping.ui.theme.FloatingBottomBar(
+                                tabs = listOf(
+                                    com.xiaogou.bookkeeping.ui.theme.BottomTab("🏠", "首页") { goTab("home") },
+                                    com.xiaogou.bookkeeping.ui.theme.BottomTab("💰", "资产") { goTab("assets") },
+                                    com.xiaogou.bookkeeping.ui.theme.BottomTab("📊", "统计") { goTab("statistics_adv") },
+                                    com.xiaogou.bookkeeping.ui.theme.BottomTab("⚙️", "设置") { goTab("settings") },
+                                ),
+                                current = currentTab,
+                            )
+                        }
+                    },
+                ) { outerPadding ->
+                NavHost(navController = nav, startDestination = start, modifier = Modifier.padding(outerPadding)) {
                     composable("lock") {
                         LockScreen(settings = settings, onUnlocked = {
                             nav.navigate("home") { popUpTo("lock") { inclusive = true } }
@@ -251,6 +285,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                     composable("lock_setup") {
                         LockSetupScreen(settings = settings, onDone = { nav.popBackStack() })
                     }
+                }
                 }
             }
         }

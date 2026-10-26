@@ -43,7 +43,6 @@ import com.xiaogou.bookkeeping.ui.AppViewModelFactory
 import com.xiaogou.bookkeeping.ui.AssetsViewModel
 import com.xiaogou.bookkeeping.ui.BudgetViewModel
 import com.xiaogou.bookkeeping.ui.HomeViewModel
-import com.xiaogou.bookkeeping.ui.theme.FloatingBottomBar
 
 /**
  * 首页（banner_record 口径）：
@@ -178,16 +177,11 @@ fun HomeScreen(
     // 按天分组：yyyy-MM-dd → 当天记录（时间倒序，数据库已按时间排）
     val byDay = records.groupBy { formatDate(it.time).take(10) }
 
-    Scaffold(
-        bottomBar = {
-            FloatingBottomBar(
-                tabs = listOf("首页" to {}, "资产" to onAssets, "统计" to onStatistics, "设置" to onSettings),
-                current = 0,
-            )
-        },
-    ) { padding ->
+    // 底部栏已提到 MainActivity 全局：这里不再自己放栏，内容底部
+    // 由外层 Scaffold 的 padding 留出，不用再额外留 92dp。
+    Scaffold { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(bottom = 92.dp),
+            modifier = Modifier.fillMaxSize().padding(padding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {

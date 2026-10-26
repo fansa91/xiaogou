@@ -57,7 +57,8 @@ import com.xiaogou.bookkeeping.ui.theme.WalkDimens
  * - 列表行 62dp、圆角 18dp、上下 8dp、左右 16dp，左侧 50dp 图标位
  *   （12dp 圆角），名左、金额右、备注在下。
  * - 右下角 50dp 悬浮按钮（16dp 圆角）向上展开：转账在上、新增在下，
- *   展开时先点哪个就是哪个；底部留 92dp 给悬浮 tab。
+ *   展开时先点哪个就是哪个；底部栏由 MainActivity 全局悬浮提供，
+ *   内容底部留白由外层 Scaffold 的 padding 给，不在这里另留。
  */
 /** 资产图标候选（源码图标选择器的 Compose 版：用符号代替原图标资源）。 */
 val AssetIcons = listOf("💰", "🏦", "💳", "💵", "🏠", "🚗", "📈", "💎")
@@ -96,8 +97,10 @@ fun AssetsScreen(factory: AppViewModelFactory, onAdd: () -> Unit, onDetail: (Lon
             }
         },
     ) { padding ->
+        // 内容底部由 MainActivity 外层 Scaffold 的 padding 留出（底部栏高），
+        // 这里不再额外留 92dp，否则底部会空出一大截。
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(bottom = 92.dp),
+            modifier = Modifier.fillMaxSize().padding(padding),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {

@@ -65,9 +65,12 @@ object WalkDimens {
     val lockBottomButtonHeight = 40.dp
 }
 
+/** 底部悬浮 tab 项：图标在上、文字在下，图标用与资产图标一致的符号。 */
+data class BottomTab(val icon: String, val label: String, val onClick: () -> Unit)
+
 /** 底部悬浮 tab 条：高 76dp，左右 22dp，底部 16dp，圆角 24dp，无指示条。 */
 @Composable
-fun FloatingBottomBar(tabs: List<Pair<String, () -> Unit>>, current: Int) {
+fun FloatingBottomBar(tabs: List<BottomTab>, current: Int) {
     Card(
         modifier = Modifier.fillMaxWidth()
             .padding(
@@ -80,17 +83,22 @@ fun FloatingBottomBar(tabs: List<Pair<String, () -> Unit>>, current: Int) {
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(WalkDimens.bottomTabHeight),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            tabs.forEachIndexed { index, (label, onClick) ->
-                TextButton(onClick = onClick) {
-                    Text(
-                        label,
-                        color = if (index == current) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            tabs.forEachIndexed { index, tab ->
+                val color = if (index == current) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+                TextButton(
+                    onClick = tab.onClick,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(tab.icon, fontSize = 20.sp, color = color)
+                        Text(tab.label, fontSize = 12.sp, color = color)
+                    }
                 }
             }
         }
@@ -288,6 +296,9 @@ fun WalkDialog(title: String, onDismiss: () -> Unit, onConfirm: () -> Unit, cont
 /**
  * 饼图（Canvas，环形）：120dp，外半径 60dp、内半径 20dp，
  * 即环厚 40dp，与源码 MathPieChartView 口径一致。
+ * 注意：这里只画饼，不画图例——三个调用处（统计、子类型、资产）
+ * 都在 Row 右边自己写了一份带金额的图例；以前饼图自带图例时，
+ * 它在 Row 里会拆成第 3 个孩子，和右边图例挤在一起造成重叠感。
  */
 @Composable
 fun PieChart(values: List<Pair<String, Long>>, colors: List<Color>, modifier: Modifier = Modifier) {
@@ -306,18 +317,6 @@ fun PieChart(values: List<Pair<String, Long>>, colors: List<Color>, modifier: Mo
                 size = Size(size.width, size.height),
             )
             start += sweep
-        }
-    }
-    Column(modifier = Modifier.padding(top = 8.dp)) {
-        values.forEachIndexed { i, (name, v) ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(10.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(colors[i % colors.size]),
-                )
-                Text(" $name ${v * 100 / total}%", fontSize = 12.sp)
-            }
         }
     }
 }
