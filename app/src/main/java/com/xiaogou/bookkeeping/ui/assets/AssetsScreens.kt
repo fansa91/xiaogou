@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
@@ -222,9 +223,29 @@ fun AssetsAddScreen(factory: AppViewModelFactory, onDone: () -> Unit) {
                 }
             }
             Text("图标")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssetIcons.forEach { ic ->
-                    OutlinedButton(onClick = { icon = ic }, modifier = Modifier.size(48.dp)) { Text(ic) }
+            // 以前 8 个图标排成一行：8×48dp + 间距 = 440dp，
+            // 内容宽只有 328dp（360dp 屏减 32dp 边距），后几个
+            // 图标直接被裁出屏幕、看不到也点不到。改成 4 列网格，
+            // 2 行全显示；选中用实心按钮、未选用描边按钮区分。
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssetIcons.chunked(4).forEach { rowIcons ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        rowIcons.forEach { ic ->
+                            if (ic == icon) {
+                                Button(
+                                    onClick = { icon = ic },
+                                    modifier = Modifier.size(48.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                ) { Text(ic) }
+                            } else {
+                                OutlinedButton(
+                                    onClick = { icon = ic },
+                                    modifier = Modifier.size(48.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                ) { Text(ic) }
+                            }
+                        }
+                    }
                 }
             }
             Text("已选：$icon")
