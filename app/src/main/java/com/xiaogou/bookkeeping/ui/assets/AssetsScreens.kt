@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -61,6 +62,9 @@ import com.xiaogou.bookkeeping.ui.theme.WalkDimens
 /** 资产图标候选（源码图标选择器的 Compose 版：用符号代替原图标资源）。 */
 val AssetIcons = listOf("💰", "🏦", "💳", "💵", "🏠", "🚗", "📈", "💎")
 
+/** 账户类型（旧版 assets_type_* 口径）：下标即 Assets.type 的取值。 */
+val AssetTypeNames = listOf("现金", "银行卡", "信用卡", "支付宝", "微信", "股票", "债券", "基金", "京东白条", "转账", "其他")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssetsScreen(factory: AppViewModelFactory, onAdd: () -> Unit, onDetail: (Long) -> Unit, onTransfer: () -> Unit, showPie: Boolean = true) {
@@ -71,6 +75,7 @@ fun AssetsScreen(factory: AppViewModelFactory, onAdd: () -> Unit, onDetail: (Lon
     val negative = assets.filter { it.money < 0 }.sumOf { -it.money }
     val net = assets.sumOf { it.money }
     var pieLiabilities by remember { mutableStateOf(false) }
+    var showGrid by remember { mutableStateOf(false) }
     val pieValues = if (pieLiabilities) {
         assets.filter { it.money < 0 }.map { (it.name) to -it.money }
     } else {
@@ -111,6 +116,9 @@ fun AssetsScreen(factory: AppViewModelFactory, onAdd: () -> Unit, onDetail: (Lon
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("总额 ${centsToYuan(net)}")
                     Text("${assets.size} 个账户")
+                    androidx.compose.material3.TextButton(onClick = { showGrid = !showGrid }) {
+                        Text(if (showGrid) "列表" else "网格")
+                    }
                 }
             }
             if (showPie) item {
@@ -142,7 +150,27 @@ fun AssetsScreen(factory: AppViewModelFactory, onAdd: () -> Unit, onDetail: (Lon
                     Text(if (pieLiabilities) "暂无负债账户" else "暂无资产账户", modifier = Modifier.padding(horizontal = 16.dp))
                 }
             }
-            items(assets) { a ->
+            if (showGrid) {
+                // 网格视图（assets_show_gride 口径）：每行 2 张小卡片，图标 + 名 + 余额。
+                // 不用 LazyVerticalGrid：它和 LazyColumn 的 items 扩展同名会冲突，按行排即可。
+                items(assets.chunked(2)) { rowAssets ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        rowAssets.forEach { a ->
+                            Card(
+                                modifier = Modifier.weight(1f).clickable { onDetail(a.id) },
+                                shape = RoundedCornerShape(WalkDimens.listCorner),
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(if (a.imgName.isNotBlank()) a.imgName else (a.name.firstOrNull() ?: "?").toString())
+                                    Text(a.name)
+                                    Text(centsToYuan(a.money))
+                                }
+                            }
+                        }
+                        if (rowAssets.size == 1) Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            } else items(assets) { a ->
                 Card(
                     modifier = Modifier.fillMaxWidth().height(WalkDimens.assetRowHeight)
                         .padding(horizontal = 16.dp).clickable { onDetail(a.id) },
@@ -176,9 +204,20 @@ fun AssetsAddScreen(factory: AppViewModelFactory, onDone: () -> Unit) {
     var amount by remember { mutableStateOf("") }
     var remark by remember { mutableStateOf("") }
     var icon by remember { mutableStateOf(AssetIcons.first()) }
+    var assetType by remember { mutableStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
     Scaffold(topBar = { TopAppBar(title = { Text("新增账户") }) }) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("账户类型")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssetTypeNames.forEachIndexed { i, label ->
+                    androidx.compose.material3.FilterChip(
+                        selected = assetType == i,
+                        onClick = { assetType = i },
+                        label = { Text(label) },
+                    )
+                }
+            }
             Text("图标")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AssetIcons.forEach { ic ->
@@ -197,7 +236,7 @@ fun AssetsAddScreen(factory: AppViewModelFactory, onDone: () -> Unit) {
                     when {
                         name.isBlank() -> error = "请填写账户名"
                         cents == null || cents < 0 -> error = "初始金额格式不正确"
-                        else -> vm.add(name, 0, cents, remark, icon, onDone)
+                        else -> vm.add(name, assetType, cents, remark, icon, onDone)
                     }
                 }, modifier = Modifier.weight(1f).height(48.dp)) { Text("确定") }
             }
@@ -211,51 +250,125 @@ fun AssetsAddScreen(factory: AppViewModelFactory, onDone: () -> Unit) {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AssetsDetailScreen(factory: AppViewModelFactory, assetsId: Long) {
+fun AssetsDetailScreen(factory: AppViewModelFactory, assetsId: Long, onDeleted: () -> Unit = {}) {
     val vm: AssetsViewModel = viewModel(factory = factory)
     val assets by vm.assets.collectAsState()
     val asset = assets.firstOrNull { it.id == assetsId }
     val modifies by vm.modifyRecords(assetsId).collectAsState(initial = emptyList())
+    val bills by vm.recordsByAsset(assetsId).collectAsState(initial = emptyList())
+    val types by vm.types().collectAsState(initial = emptyList())
+    val typeById = types.associateBy { it.id }
     var tab by remember { mutableStateOf(0) }
+    // 曲线范围（dialog_curve_style 口径）：周 / 月 / 季 / 半年 / 年 / 2–6 年，按变动时间过滤。
+    var curveDays by remember { mutableStateOf(365) }
+    val curveRanges = listOf("周" to 7, "月" to 30, "季" to 90, "半年" to 180, "年" to 365, "2年" to 730, "3年" to 1095, "4年" to 1460, "5年" to 1825, "6年" to 2190)
+    val curveModifies = modifies.filter { it.createTime >= System.currentTimeMillis() - curveDays * 24L * 60 * 60 * 1000 }
+    var modifyDetail by remember { mutableStateOf<com.xiaogou.bookkeeping.data.entity.AssetsModifyRecord?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
     Scaffold(topBar = { TopAppBar(title = { Text(asset?.name ?: "账户详情") }) }) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 if (asset != null) {
                     Text(asset.name)
+                    Text("类型 ${AssetTypeNames.getOrNull(asset.type) ?: "其他"}")
                     Text("余额 ${centsToYuan(asset.money)}")
                     Text("初始 ${centsToYuan(asset.initMoney)}")
                     if (asset.remark.isNotBlank()) Text(asset.remark)
                     Text("创建 ${formatDate(asset.createTime)}")
+                    Button(onClick = { showDeleteConfirm = true }) { Text("删除账户") }
+                    deleteError?.let { Text(it) }
                 } else {
                     Text("账户不存在")
                 }
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { tab = 0 }) { Text("变动记录") }
-                    OutlinedButton(onClick = { tab = 1 }) { Text("曲线") }
+                    Button(onClick = { tab = 0 }) { Text("账单") }
+                    OutlinedButton(onClick = { tab = 1 }) { Text("变动记录") }
+                    OutlinedButton(onClick = { tab = 2 }) { Text("曲线") }
                 }
             }
-            if (tab == 1) {
-                item {
-                    if (modifies.size >= 2) {
-                        CurveChart(values = modifies.reversed().map { it.money }, color = MaterialTheme.colorScheme.primary)
-                    } else {
-                        Text("变动记录不足 2 条，暂不画曲线。")
+            when (tab) {
+                0 -> {
+                    if (bills.isEmpty()) item { Text("该账户下暂无账单。") }
+                    items(bills) { r ->
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("${typeById[r.recordTypeId]?.name ?: ""} · ${r.remark ?: ""}")
+                                Text("${formatDate(r.time)} · ${centsToYuan(r.money ?: 0)}")
+                            }
+                        }
                     }
                 }
-            } else {
-                items(modifies) { m ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text("${centsToYuan(m.moneyBefore)} → ${centsToYuan(m.money)}")
-                            Text("变动后 ${centsToYuan(m.money)}（变动前 ${centsToYuan(m.moneyBefore)}）")
-                            Text(formatDate(m.createTime))
+                1 -> {
+                    if (modifies.isEmpty()) item { Text("暂无变动记录。") }
+                    items(modifies) { m ->
+                        Card(modifier = Modifier.fillMaxWidth().clickable { modifyDetail = m }) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("${centsToYuan(m.moneyBefore)} → ${centsToYuan(m.money)}")
+                                Text("变动后 ${centsToYuan(m.money)}（变动前 ${centsToYuan(m.moneyBefore)}）")
+                                Text(formatDate(m.createTime))
+                            }
+                        }
+                    }
+                }
+                else -> {
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            curveRanges.forEach { (label, days) ->
+                                androidx.compose.material3.FilterChip(
+                                    selected = curveDays == days,
+                                    onClick = { curveDays = days },
+                                    label = { Text(label) },
+                                )
+                            }
+                        }
+                        if (curveModifies.size >= 2) {
+                            CurveChart(values = curveModifies.reversed().map { it.money }, color = MaterialTheme.colorScheme.primary)
+                        } else {
+                            Text("所选范围内变动记录不足 2 条，暂不画曲线。")
                         }
                     }
                 }
             }
         }
+    }
+    modifyDetail?.let { m ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { modifyDetail = null },
+            title = { Text("变动详情") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${centsToYuan(m.moneyBefore)} → ${centsToYuan(m.money)}")
+                    Text("日期 ${formatDate(m.createTime)}")
+                }
+            },
+            confirmButton = {
+                Button(onClick = { vm.deleteModifyRecord(m); modifyDetail = null }) { Text("删除这条记录") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { modifyDetail = null }) { Text("关闭") }
+            },
+        )
+    }
+    if (showDeleteConfirm && asset != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("删除账户") },
+            text = { Text("确定删除“${asset.name}”吗？名下有记账记录时不能删除。") },
+            confirmButton = {
+                Button(onClick = {
+                    vm.deleteAssets(asset) { ok ->
+                        if (ok) onDeleted() else deleteError = "该账户下有记账记录，不能删除。"
+                    }
+                    showDeleteConfirm = false
+                }) { Text("删除") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+            },
+        )
     }
 }
 

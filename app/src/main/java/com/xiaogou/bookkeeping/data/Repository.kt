@@ -167,6 +167,33 @@ class BookkeepingRepository(private val db: AppDatabase) {
         db.recordTypeDao().update(type.copy(imgName = imgName))
     }
 
+    /** 删分类：有记录或有子类型时返回 false（不删），由界面提示。 */
+    suspend fun deleteType(type: RecordType): Boolean {
+        if (db.recordDao().countByType(type.id) > 0) return false
+        if (db.recordTypeDao().countByParent(type.id) > 0) return false
+        db.recordTypeDao().delete(type)
+        return true
+    }
+
+    /** 交换两个分类的排序值（分类管理上移 / 下移用）。 */
+    suspend fun swapTypeRanking(a: RecordType, b: RecordType) {
+        db.recordTypeDao().update(a.copy(ranking = b.ranking))
+        db.recordTypeDao().update(b.copy(ranking = a.ranking))
+    }
+
+    fun recordsByAsset(assetsId: Long) = db.recordDao().recordsByAsset(assetsId)
+
+    /** 删账户：名下有记账记录时返回 false（外键会挡住，界面先提示）；否则删账户，变动/转账记录按外键级联删除。 */
+    suspend fun deleteAssets(asset: Assets): Boolean {
+        if (db.recordDao().countByAsset(asset.id) > 0) return false
+        db.assetsDao().delete(asset)
+        return true
+    }
+
+    suspend fun deleteModifyRecord(record: AssetsModifyRecord) {
+        db.assetsModifyDao().delete(record)
+    }
+
     suspend fun setTypeEnabled(type: RecordType, enabled: Boolean) {
         db.recordTypeDao().update(type.copy(state = if (enabled) 1 else 0))
     }

@@ -63,6 +63,17 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         val repo = BookkeepingRepository(db)
         val factory = AppViewModelFactory(repo)
         val settings = Settings.from(applicationContext)
+        // 通知权限（Android 13+）：预算 / 周期提醒要靠它，不申请就静默发不出。
+        // 只在未授权时申请一次意图，系统弹窗由用户决定，拒绝也不影响记账。
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.POST_NOTIFICATIONS,
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            androidx.core.app.ActivityCompat.requestPermissions(
+                this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1001,
+            )
+        }
         scheduleDailyWork(applicationContext)
         val start = if (settings.lockEnabled && !settings.pinHash.isNullOrBlank()) "lock" else "home"
         setContent {
@@ -124,7 +135,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                     }
                     composable("assets_detail/{id}") { backStack ->
                         val id = backStack.arguments?.getString("id")?.toLongOrNull() ?: 0L
-                        AssetsDetailScreen(factory = factory, assetsId = id)
+                        AssetsDetailScreen(factory = factory, assetsId = id, onDeleted = { nav.popBackStack() })
                     }
                     composable("assets_transfer") {
                         TransferScreen(factory = factory, onDone = { nav.popBackStack() })

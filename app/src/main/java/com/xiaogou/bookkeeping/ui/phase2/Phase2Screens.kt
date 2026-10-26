@@ -66,6 +66,7 @@ fun BudgetScreen(factory: AppViewModelFactory, homeFactoryVm: HomeViewModel, onA
     val types by homeFactoryVm.types.collectAsState()
     val typeById = types.associateBy { it.id }
     val spentByType = sums.associate { it.recordTypeId to it.total }
+    var detailBudget by remember { mutableStateOf<com.xiaogou.bookkeeping.data.entity.Budget?>(null) }
     Scaffold(topBar = { TopAppBar(title = { Text("预算") }) }) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) { Text("新增本月预算") } }
@@ -77,7 +78,7 @@ fun BudgetScreen(factory: AppViewModelFactory, homeFactoryVm: HomeViewModel, onA
                     ratio >= 0.8f -> "即将用尽"
                     else -> "正常"
                 }
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(modifier = Modifier.fillMaxWidth().clickable { detailBudget = b }) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text("${typeById[b.recordTypeId]?.name ?: ""} · $status")
                         Text("已用 ${centsToYuan(spent)} / 预算 ${centsToYuan(b.money)}")
@@ -88,6 +89,30 @@ fun BudgetScreen(factory: AppViewModelFactory, homeFactoryVm: HomeViewModel, onA
             }
             if (budgets.isEmpty()) item { Text("本月暂无预算，点上面新增。提醒口径：80% 即将用尽、100% 超支，同月同预算只提醒一次。") }
         }
+    }
+    detailBudget?.let { b ->
+        val spent = spentByType[b.recordTypeId] ?: 0L
+        val remaining = b.money - spent
+        val cal = java.util.Calendar.getInstance()
+        val daysInMonth = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+        val daysLeft = (daysInMonth - cal.get(java.util.Calendar.DAY_OF_MONTH) + 1).coerceAtLeast(1)
+        val daily = remaining / daysLeft
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { detailBudget = null },
+            title = { Text("${typeById[b.recordTypeId]?.name ?: ""} · 预算详情") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("预算总额 ${centsToYuan(b.money)}")
+                    Text("已用 ${centsToYuan(spent)}")
+                    Text("剩余 ${centsToYuan(remaining)}")
+                    Text("可日均 ${centsToYuan(daily)}")
+                    Text("剩余天数 $daysLeft 天")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { detailBudget = null }) { Text("知道了") }
+            },
+        )
     }
 }
 
@@ -226,6 +251,7 @@ fun ReimburseScreen(factory: AppViewModelFactory, onAdd: () -> Unit) {
                         Text(if (item.reimburseState == 1) "已报销" else "未报销")
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (item.reimburseState == 0) Button(onClick = { vm.markReimbursed(item) }) { Text("标记已报销") }
+                            if (item.reimburseState == 1) Button(onClick = { vm.undoReimbursed(item) }) { Text("撤销已报销") }
                             Button(onClick = { vm.delete(item) }) { Text("删除") }
                         }
                     }

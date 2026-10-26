@@ -79,6 +79,7 @@ fun CalendarPickerDialog(initialMs: Long, onDismiss: () -> Unit, onDatePicked: (
     val base = Calendar.getInstance().apply { timeInMillis = initialMs }
     var year by remember { mutableStateOf(base.get(Calendar.YEAR)) }
     var month by remember { mutableStateOf(base.get(Calendar.MONTH)) }
+    var showYearPicker by remember { mutableStateOf(false) }
     val selectedDay = if (year == base.get(Calendar.YEAR) && month == base.get(Calendar.MONTH)) {
         base.get(Calendar.DAY_OF_MONTH)
     } else {
@@ -109,7 +110,9 @@ fun CalendarPickerDialog(initialMs: Long, onDismiss: () -> Unit, onDatePicked: (
                         year = c.get(Calendar.YEAR)
                         month = c.get(Calendar.MONTH)
                     }) { Text("‹ 上月") }
-                    Text("${year}年${month + 1}月")
+                    androidx.compose.material3.TextButton(onClick = { showYearPicker = true }) {
+                        Text("${year}年${month + 1}月 ▾")
+                    }
                     androidx.compose.material3.TextButton(onClick = {
                         val c = Calendar.getInstance().apply { set(year, month, 1) }
                         c.add(Calendar.MONTH, 1)
@@ -159,6 +162,27 @@ fun CalendarPickerDialog(initialMs: Long, onDismiss: () -> Unit, onDatePicked: (
             androidx.compose.material3.TextButton(onClick = onDismiss) { Text("取消") }
         },
     )
+    if (showYearPicker) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showYearPicker = false },
+            title = { Text("选择年份") },
+            text = {
+                Column {
+                    val thisYear = Calendar.getInstance().get(Calendar.YEAR)
+                    ((thisYear - 10)..(thisYear + 10)).forEach { y ->
+                        androidx.compose.material3.TextButton(
+                            onClick = { year = y; showYearPicker = false },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("$y 年") }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showYearPicker = false }) { Text("取消") }
+            },
+        )
+    }
 }
 
 /**
@@ -216,6 +240,8 @@ fun RecordAddScreen(factory: AppViewModelFactory, onDone: () -> Unit, onBack: ()
     var assetsMenu by remember { mutableStateOf(false) }
     var recordTimeMs by remember { mutableStateOf(System.currentTimeMillis()) }
     var showCalendar by remember { mutableStateOf(false) }
+    // 子类型选择：点大类时若有已启用的子类型，先弹子类型框（dialog_subtype_select 口径）。
+    var subtypeParent by remember { mutableStateOf<com.xiaogou.bookkeeping.data.entity.RecordType?>(null) }
     val context = LocalContext.current
 
     if (selectedTypeId == null && types.isNotEmpty()) selectedTypeId = types.first().id
@@ -293,19 +319,52 @@ fun RecordAddScreen(factory: AppViewModelFactory, onDone: () -> Unit, onBack: ()
                 modifier = Modifier.height(36.dp),
             )
             if (types.isEmpty()) Text("该类型下暂无启用的分类，请先去分类管理添加。")
+            // 分类网格只显示大类（parentId == -1）；子类型不平铺，点大类时再选。
+            val topTypes = types.filter { it.parentId == -1L }
+            val selectedType = types.firstOrNull { it.id == selectedTypeId }
+            if (selectedType != null && selectedType.parentId != -1L) {
+                Text("已选：${types.firstOrNull { it.id == selectedType.parentId }?.name ?: ""} · ${selectedType.name ?: ""}")
+            }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f, fill = false),
             ) {
-                items(types) { t ->
+                items(topTypes) { t ->
                     FilterChip(
-                        selected = selectedTypeId == t.id,
-                        onClick = { selectedTypeId = t.id },
+                        selected = selectedTypeId == t.id ||
+                            types.firstOrNull { it.id == selectedTypeId }?.parentId == t.id,
+                        onClick = {
+                            val subs = types.filter { it.parentId == t.id }
+                            if (subs.isNotEmpty()) subtypeParent = t else selectedTypeId = t.id
+                        },
                         label = { Text(t.name ?: "") },
                     )
                 }
+            }
+            subtypeParent?.let { parent ->
+                val subs = types.filter { it.parentId == parent.id }
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { subtypeParent = null },
+                    title = { Text("选择${parent.name}的子类型") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            subs.forEach { s ->
+                                androidx.compose.material3.TextButton(
+                                    onClick = { selectedTypeId = s.id; subtypeParent = null },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text(s.name ?: "") }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(onClick = { selectedTypeId = parent.id; subtypeParent = null }) { Text("直接用大类") }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = { subtypeParent = null }) { Text("取消") }
+                    },
+                )
             }
             OutlinedTextField(
                 value = remark, onValueChange = { remark = it }, label = { Text("备注") },

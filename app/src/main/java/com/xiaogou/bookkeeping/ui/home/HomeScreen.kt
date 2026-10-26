@@ -161,6 +161,7 @@ fun HomeScreen(
     val assetsList by vm.assets.collectAsState()
     val assetById = assetsList.associateBy { it.id }
     var detailRecord by remember { mutableStateOf<Record?>(null) }
+    var deletingTransfer by remember { mutableStateOf<com.xiaogou.bookkeeping.data.entity.AssetsTransferRecord?>(null) }
     val yearMonth by vm.yearMonth.collectAsState()
     val records by vm.records.collectAsState()
     val sums by vm.sums.collectAsState()
@@ -264,13 +265,26 @@ fun HomeScreen(
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(centsToYuan(t.money))
-                                TextButton(onClick = { assetsVm.deleteTransfer(t) }) { Text("删除") }
+                                TextButton(onClick = { deletingTransfer = t }) { Text("删除") }
                             }
                         }
                     }
                 }
             }
         }
+    }
+    deletingTransfer?.let { t ->
+        AlertDialog(
+            onDismissRequest = { deletingTransfer = null },
+            title = { Text("删除转账") },
+            text = { Text("确定删除这条转账记录吗？删除后转出账户加回、转入账户扣回。") },
+            confirmButton = {
+                TextButton(onClick = { assetsVm.deleteTransfer(t); deletingTransfer = null }) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingTransfer = null }) { Text("取消") }
+            },
+        )
     }
     // 记录详情弹窗（源码 dialog_record_content 口径）：分类 / 金额 / 账户 /
     // 备注 / 时间，点编辑进编辑页，点删除直接删。

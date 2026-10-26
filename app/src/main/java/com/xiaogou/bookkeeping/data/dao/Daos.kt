@@ -37,6 +37,15 @@ interface RecordDao {
     @Query("SELECT record_type_id AS recordTypeId, COALESCE(SUM(money), 0) AS total FROM `Record` WHERE time BETWEEN :start AND :end GROUP BY record_type_id")
     fun sumsByType(start: Long, end: Long): Flow<List<TypeSum>>
 
+    @Query("SELECT * FROM `Record` WHERE assets_id = :assetsId ORDER BY time DESC, id DESC LIMIT 200")
+    fun recordsByAsset(assetsId: Long): Flow<List<Record>>
+
+    @Query("SELECT COUNT(*) FROM `Record` WHERE record_type_id = :typeId")
+    suspend fun countByType(typeId: Long): Int
+
+    @Query("SELECT COUNT(*) FROM `Record` WHERE assets_id = :assetsId")
+    suspend fun countByAsset(assetsId: Long): Int
+
     @Query("SELECT * FROM `Record` WHERE id = :id")
     suspend fun getById(id: Long): Record?
 
@@ -69,6 +78,12 @@ interface RecordTypeDao {
 
     @Query("SELECT COUNT(*) FROM RecordType")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM RecordType WHERE parent_id = :parentId")
+    suspend fun countByParent(parentId: Long): Int
+
+    @Delete
+    suspend fun delete(type: RecordType)
 }
 
 @Dao
@@ -87,6 +102,9 @@ interface AssetsDao {
 
     @Query("UPDATE Assets SET money = :money WHERE id = :id")
     suspend fun updateMoney(id: Long, money: Long)
+
+    @Delete
+    suspend fun delete(assets: Assets)
 }
 
 @Dao
@@ -96,6 +114,9 @@ interface AssetsModifyDao {
 
     @Insert
     suspend fun insert(record: AssetsModifyRecord)
+
+    @Delete
+    suspend fun delete(record: AssetsModifyRecord)
 }
 
 @Dao

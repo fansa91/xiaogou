@@ -78,6 +78,11 @@ class ReimburseViewModel(private val repo: BookkeepingRepository) : ViewModel() 
         viewModelScope.launch { repo.updateReimburse(item.copy(reimburseState = 1, reimburseMoney = item.money)) }
     }
 
+    /** 撤销已报销：回到未报销状态（旧版 reimburse_dialog_undo 口径）。 */
+    fun undoReimbursed(item: Reimburse) {
+        viewModelScope.launch { repo.updateReimburse(item.copy(reimburseState = 0, reimburseMoney = 0)) }
+    }
+
     fun delete(item: Reimburse) = viewModelScope.launch { repo.deleteReimburse(item) }
 }
 

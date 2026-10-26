@@ -43,6 +43,8 @@ fun TypeManageScreen(factory: AppViewModelFactory, onAdd: () -> Unit) {
     var editing by remember { mutableStateOf<com.xiaogou.bookkeeping.data.entity.RecordType?>(null) }
     var editName by remember { mutableStateOf("") }
     var editIcon by remember { mutableStateOf("") }
+    var deleting by remember { mutableStateOf<com.xiaogou.bookkeeping.data.entity.RecordType?>(null) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
     Scaffold(topBar = { TopAppBar(title = { Text("分类管理") }) }) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
@@ -52,7 +54,9 @@ fun TypeManageScreen(factory: AppViewModelFactory, onAdd: () -> Unit) {
                     Button(onClick = onAdd) { Text("新增分类") }
                 }
             }
-            items(types.filter { it.type == if (showIncome) 1 else 0 }) { t ->
+            val shown = types.filter { it.type == if (showIncome) 1 else 0 }
+            items(shown) { t ->
+                val index = shown.indexOf(t)
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(WalkDimens.rowCorner)) {
                     Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Row {
@@ -67,11 +71,22 @@ fun TypeManageScreen(factory: AppViewModelFactory, onAdd: () -> Unit) {
                                 editName = t.name ?: ""
                                 editIcon = t.imgName ?: ""
                             }) { Text("改名") }
+                            androidx.compose.material3.TextButton(onClick = { deleting = t }) { Text("删除") }
+                            // 排序：与同组相邻项交换 ranking，列表按 ranking 排。
+                            androidx.compose.material3.TextButton(
+                                enabled = index > 0,
+                                onClick = { vm.swapRanking(t, shown[index - 1]) },
+                            ) { Text("↑") }
+                            androidx.compose.material3.TextButton(
+                                enabled = index < shown.size - 1,
+                                onClick = { vm.swapRanking(t, shown[index + 1]) },
+                            ) { Text("↓") }
                             Switch(checked = t.state == 1, onCheckedChange = { vm.setEnabled(t, it) })
                         }
                     }
                 }
             }
+            deleteError?.let { item { Text(it) } }
         }
     }
     val editingType = editing
@@ -101,6 +116,24 @@ fun TypeManageScreen(factory: AppViewModelFactory, onAdd: () -> Unit) {
             },
             dismissButton = {
                 androidx.compose.material3.TextButton(onClick = { editing = null }) { Text("取消") }
+            },
+        )
+    }
+    deleting?.let { t ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("删除分类") },
+            text = { Text("确定删除“${t.name}”吗？该分类下有记录或子类型时不能删除。") },
+            confirmButton = {
+                Button(onClick = {
+                    vm.deleteType(t) { ok ->
+                        if (!ok) deleteError = "该分类下有记录或子类型，不能删除。"
+                    }
+                    deleting = null
+                }) { Text("删除") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { deleting = null }) { Text("取消") }
             },
         )
     }

@@ -121,6 +121,18 @@ class AssetsViewModel(private val repo: BookkeepingRepository) : ViewModel() {
 
     fun modifyRecords(assetsId: Long) = repo.modifyRecords(assetsId)
 
+    fun types() = repo.allTypes()
+
+    fun recordsByAsset(assetsId: Long) = repo.recordsByAsset(assetsId)
+
+    fun deleteAssets(asset: Assets, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch { onResult(repo.deleteAssets(asset)) }
+    }
+
+    fun deleteModifyRecord(record: com.xiaogou.bookkeeping.data.entity.AssetsModifyRecord) {
+        viewModelScope.launch { repo.deleteModifyRecord(record) }
+    }
+
     fun add(name: String, type: Int, initMoneyCents: Long, remark: String, onDone: () -> Unit) {
         add(name, type, initMoneyCents, remark, "", onDone)
     }
@@ -155,6 +167,14 @@ class TypeViewModel(private val repo: BookkeepingRepository) : ViewModel() {
 
     fun setIcon(type: RecordType, imgName: String) {
         viewModelScope.launch { repo.setTypeIcon(type, imgName) }
+    }
+
+    fun deleteType(type: RecordType, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch { onResult(repo.deleteType(type)) }
+    }
+
+    fun swapRanking(a: RecordType, b: RecordType) {
+        viewModelScope.launch { repo.swapTypeRanking(a, b) }
     }
 
     fun setEnabled(type: RecordType, enabled: Boolean) {
