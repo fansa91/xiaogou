@@ -55,7 +55,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
  * 应用锁：Settings 里开启且已设 PIN 时，启动先走 lock，解锁后进 home；
  * 每日任务在启动时调度一次（WorkManager，每日 09:00 前后）。
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

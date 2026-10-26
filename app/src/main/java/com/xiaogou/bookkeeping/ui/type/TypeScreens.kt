@@ -39,6 +39,10 @@ fun TypeManageScreen(factory: AppViewModelFactory, onAdd: () -> Unit) {
     val vm: TypeViewModel = viewModel(factory = factory)
     val types by vm.types.collectAsState()
     var showIncome by remember { mutableStateOf(false) }
+    // 改名 / 换图标弹窗：点“改名”打开，改名与图标一起保存。
+    var editing by remember { mutableStateOf<com.xiaogou.bookkeeping.data.entity.RecordType?>(null) }
+    var editName by remember { mutableStateOf("") }
+    var editIcon by remember { mutableStateOf("") }
     Scaffold(topBar = { TopAppBar(title = { Text("分类管理") }) }) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
@@ -52,14 +56,53 @@ fun TypeManageScreen(factory: AppViewModelFactory, onAdd: () -> Unit) {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(WalkDimens.rowCorner)) {
                     Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Row {
-                            Box(modifier = Modifier.size(WalkDimens.iconBox))
+                            Box(modifier = Modifier.size(WalkDimens.iconBox)) {
+                                Text(if (!t.imgName.isNullOrBlank()) t.imgName else (t.name?.firstOrNull()?.toString() ?: "?"))
+                            }
                             Text(t.name ?: "", modifier = Modifier.padding(start = 8.dp))
                         }
-                        Switch(checked = t.state == 1, onCheckedChange = { vm.setEnabled(t, it) })
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            androidx.compose.material3.TextButton(onClick = {
+                                editing = t
+                                editName = t.name ?: ""
+                                editIcon = t.imgName ?: ""
+                            }) { Text("改名") }
+                            Switch(checked = t.state == 1, onCheckedChange = { vm.setEnabled(t, it) })
+                        }
                     }
                 }
             }
         }
+    }
+    val editingType = editing
+    if (editingType != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text("编辑分类") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = editName, onValueChange = { editName = it }, label = { Text("分类名") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    Text("图标")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        com.xiaogou.bookkeeping.ui.assets.AssetIcons.forEach { ic ->
+                            androidx.compose.material3.OutlinedButton(onClick = { editIcon = ic }, modifier = Modifier.size(48.dp)) { Text(ic) }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (editName.isNotBlank()) {
+                        vm.rename(editingType, editName)
+                        vm.setIcon(editingType, editIcon)
+                    }
+                    editing = null
+                }) { Text("保存") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { editing = null }) { Text("取消") }
+            },
+        )
     }
 }
 
@@ -69,6 +112,7 @@ fun TypeAddScreen(factory: AppViewModelFactory, onDone: () -> Unit) {
     val vm: TypeViewModel = viewModel(factory = factory)
     var name by remember { mutableStateOf("") }
     var isIncome by remember { mutableStateOf(false) }
+    var icon by remember { mutableStateOf(com.xiaogou.bookkeeping.ui.assets.AssetIcons.first()) }
     var error by remember { mutableStateOf<String?>(null) }
     Scaffold(topBar = { TopAppBar(title = { Text("新增分类") }) }) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -76,11 +120,17 @@ fun TypeAddScreen(factory: AppViewModelFactory, onDone: () -> Unit) {
                 FilterChip(selected = !isIncome, onClick = { isIncome = false }, label = { Text("支出") })
                 FilterChip(selected = isIncome, onClick = { isIncome = true }, label = { Text("收入") })
             }
+            Text("图标")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.xiaogou.bookkeeping.ui.assets.AssetIcons.forEach { ic ->
+                    androidx.compose.material3.OutlinedButton(onClick = { icon = ic }, modifier = Modifier.size(48.dp)) { Text(ic) }
+                }
+            }
             OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("分类名") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             error?.let { Text(it) }
             Button(onClick = {
                 if (name.isBlank()) error = "请填写分类名"
-                else vm.add(name, if (isIncome) 1 else 0, onDone)
+                else vm.add(name, if (isIncome) 1 else 0, icon, onDone)
             }, modifier = Modifier.fillMaxWidth()) { Text("保存") }
         }
     }

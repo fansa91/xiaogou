@@ -50,6 +50,117 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+/** 只选时间（时分）的系统弹窗：日历视图选完日期后用它补时间。 */
+fun showTimePicker(context: android.content.Context, initialMs: Long, onPick: (Long) -> Unit) {
+    val cal = Calendar.getInstance().apply { timeInMillis = initialMs }
+    TimePickerDialog(
+        context,
+        { _, h, min ->
+            val picked = Calendar.getInstance().apply {
+                timeInMillis = initialMs
+                set(Calendar.HOUR_OF_DAY, h)
+                set(Calendar.MINUTE, min)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            onPick(picked.timeInMillis)
+        },
+        cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true,
+    ).show()
+}
+
+/**
+ * Compose 月历视图（layout_calendar_* 口径）：月份标题 + 上月/下月切换 +
+ * 7 列星期头 + 日期格，选中的日期用主题色底，今天描边；点某天后
+ * 回调该天的毫秒时间戳（时分保留原值，调用方再弹时间弹窗补齐）。
+ */
+@Composable
+fun CalendarPickerDialog(initialMs: Long, onDismiss: () -> Unit, onDatePicked: (Long) -> Unit) {
+    val base = Calendar.getInstance().apply { timeInMillis = initialMs }
+    var year by remember { mutableStateOf(base.get(Calendar.YEAR)) }
+    var month by remember { mutableStateOf(base.get(Calendar.MONTH)) }
+    val selectedDay = if (year == base.get(Calendar.YEAR) && month == base.get(Calendar.MONTH)) {
+        base.get(Calendar.DAY_OF_MONTH)
+    } else {
+        -1
+    }
+    val first = Calendar.getInstance().apply {
+        set(year, month, 1, 0, 0, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    // 星期日起算：firstDayOfWeek 在中文环境为周日，空白格 = 周几 - 1。
+    val blanks = (first.get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY).coerceAtLeast(0)
+    val daysInMonth = first.getActualMaximum(Calendar.DAY_OF_MONTH)
+    val cells: List<Int?> = List(blanks) { null } + (1..daysInMonth).toList()
+    val today = Calendar.getInstance()
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择日期") },
+        text = {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.compose.material3.TextButton(onClick = {
+                        val c = Calendar.getInstance().apply { set(year, month, 1) }
+                        c.add(Calendar.MONTH, -1)
+                        year = c.get(Calendar.YEAR)
+                        month = c.get(Calendar.MONTH)
+                    }) { Text("‹ 上月") }
+                    Text("${year}年${month + 1}月")
+                    androidx.compose.material3.TextButton(onClick = {
+                        val c = Calendar.getInstance().apply { set(year, month, 1) }
+                        c.add(Calendar.MONTH, 1)
+                        year = c.get(Calendar.YEAR)
+                        month = c.get(Calendar.MONTH)
+                    }) { Text("下月 ›") }
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    listOf("日", "一", "二", "三", "四", "五", "六").forEach { Text(it) }
+                }
+                LazyVerticalGrid(columns = GridCells.Fixed(7)) {
+                    items(cells) { day ->
+                        if (day == null) {
+                            Text("")
+                        } else {
+                            val isSelected = day == selectedDay
+                            val isToday = year == today.get(Calendar.YEAR) &&
+                                month == today.get(Calendar.MONTH) &&
+                                day == today.get(Calendar.DAY_OF_MONTH)
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    val picked = Calendar.getInstance().apply {
+                                        timeInMillis = initialMs
+                                        set(Calendar.YEAR, year)
+                                        set(Calendar.MONTH, month)
+                                        set(Calendar.DAY_OF_MONTH, day)
+                                    }
+                                    onDatePicked(picked.timeInMillis)
+                                },
+                            ) {
+                                Text(
+                                    day.toString(),
+                                    color = when {
+                                        isSelected -> androidx.compose.material3.MaterialTheme.colorScheme.primary
+                                        isToday -> androidx.compose.material3.MaterialTheme.colorScheme.secondary
+                                        else -> androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
+}
+
 /**
  * 日期时间选择：系统日期弹窗 → 时间弹窗，两步选完回一个毫秒时间戳。
  * 源码的日期 / 月份选择器（dialog_date_picker / dialog_month_picker /
@@ -104,6 +215,7 @@ fun RecordAddScreen(factory: AppViewModelFactory, onDone: () -> Unit, onBack: ()
     var error by remember { mutableStateOf<String?>(null) }
     var assetsMenu by remember { mutableStateOf(false) }
     var recordTimeMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    var showCalendar by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     if (selectedTypeId == null && types.isNotEmpty()) selectedTypeId = types.first().id
@@ -251,7 +363,7 @@ fun RecordAddScreen(factory: AppViewModelFactory, onDone: () -> Unit, onBack: ()
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedButton(onClick = { showDateTimePicker(context, recordTimeMs) { recordTimeMs = it } }) {
+                OutlinedButton(onClick = { showCalendar = true }) {
                     Text(formatDate(recordTimeMs))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -263,6 +375,16 @@ fun RecordAddScreen(factory: AppViewModelFactory, onDone: () -> Unit, onBack: ()
             Text(today, fontSize = 12.sp)
             OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("返回") }
         }
+    }
+    if (showCalendar) {
+        CalendarPickerDialog(
+            initialMs = recordTimeMs,
+            onDismiss = { showCalendar = false },
+            onDatePicked = { dayMs ->
+                showCalendar = false
+                showTimePicker(context, dayMs) { recordTimeMs = it }
+            },
+        )
     }
 }
 
@@ -284,6 +406,7 @@ fun RecordEditScreen(factory: AppViewModelFactory, recordId: Long, onDone: () ->
     var selectedAssetsId by remember { mutableStateOf<Long?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var assetsMenu by remember { mutableStateOf(false) }
+    var showCalendar by remember { mutableStateOf(false) }
     var loaded by remember { mutableStateOf(false) }
     val types by vm.allTypes().collectAsState(initial = emptyList())
     val assets by vm.assets().collectAsState(initial = emptyList())
@@ -332,7 +455,7 @@ fun RecordEditScreen(factory: AppViewModelFactory, recordId: Long, onDone: () ->
                     )
                 }
                 OutlinedTextField(value = remark, onValueChange = { remark = it }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                OutlinedButton(onClick = { showDateTimePicker(context, timeMs) { timeMs = it } }, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { showCalendar = true }, modifier = Modifier.fillMaxWidth()) {
                     Text(formatDate(timeMs))
                 }
                 error?.let { Text(it) }
@@ -349,5 +472,15 @@ fun RecordEditScreen(factory: AppViewModelFactory, recordId: Long, onDone: () ->
                 }, modifier = Modifier.fillMaxWidth()) { Text("保存修改") }
             }
         }
+    }
+    if (showCalendar) {
+        CalendarPickerDialog(
+            initialMs = timeMs,
+            onDismiss = { showCalendar = false },
+            onDatePicked = { dayMs ->
+                showCalendar = false
+                showTimePicker(context, dayMs) { timeMs = it }
+            },
+        )
     }
 }

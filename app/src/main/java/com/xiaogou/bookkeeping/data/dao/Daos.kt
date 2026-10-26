@@ -26,6 +26,14 @@ interface RecordDao {
     @Query("SELECT * FROM `Record` WHERE remark LIKE '%' || :query || '%' ORDER BY time DESC, id DESC LIMIT 200")
     fun searchByRemark(query: String): Flow<List<Record>>
 
+    /** 搜索：备注或账户名命中都算（fragment_search 口径：结果带账户名）。 */
+    @Query(
+        "SELECT `Record`.* FROM `Record` LEFT JOIN `Assets` ON `Record`.assets_id = `Assets`.id " +
+            "WHERE `Record`.remark LIKE '%' || :query || '%' OR `Assets`.name LIKE '%' || :query || '%' " +
+            "ORDER BY `Record`.time DESC, `Record`.id DESC LIMIT 200",
+    )
+    fun searchByRemarkOrAsset(query: String): Flow<List<Record>>
+
     @Query("SELECT record_type_id AS recordTypeId, COALESCE(SUM(money), 0) AS total FROM `Record` WHERE time BETWEEN :start AND :end GROUP BY record_type_id")
     fun sumsByType(start: Long, end: Long): Flow<List<TypeSum>>
 

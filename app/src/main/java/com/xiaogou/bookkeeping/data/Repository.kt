@@ -26,6 +26,7 @@ class BookkeepingRepository(private val db: AppDatabase) {
     fun recordsInRange(start: Long, end: Long) = db.recordDao().recordsInRange(start, end)
     fun recordsByType(typeId: Long, start: Long, end: Long) = db.recordDao().recordsByType(typeId, start, end)
     fun searchByRemark(query: String) = db.recordDao().searchByRemark(query)
+    fun searchByRemarkOrAsset(query: String) = db.recordDao().searchByRemarkOrAsset(query)
     fun sumsByType(start: Long, end: Long) = db.recordDao().sumsByType(start, end)
     fun allTypes(): Flow<List<RecordType>> = db.recordTypeDao().all()
     fun enabledTypes(type: Int): Flow<List<RecordType>> = db.recordTypeDao().enabledByType(type)
@@ -158,8 +159,12 @@ class BookkeepingRepository(private val db: AppDatabase) {
         }
     }
 
-    suspend fun addType(name: String, type: Int, ranking: Int = 99) {
-        db.recordTypeDao().insert(RecordType(name = name, imgName = "", type = type, ranking = ranking, state = 1, parentId = -1))
+    suspend fun addType(name: String, type: Int, ranking: Int = 99, imgName: String = "") {
+        db.recordTypeDao().insert(RecordType(name = name, imgName = imgName, type = type, ranking = ranking, state = 1, parentId = -1))
+    }
+
+    suspend fun setTypeIcon(type: RecordType, imgName: String) {
+        db.recordTypeDao().update(type.copy(imgName = imgName))
     }
 
     suspend fun setTypeEnabled(type: RecordType, enabled: Boolean) {

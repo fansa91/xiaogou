@@ -97,4 +97,6 @@ dependencies {
     implementation "androidx.room:room-ktx:2.6.1"
     ksp "androidx.room:room-compiler:2.6.1"
     implementation "androidx.work:work-runtime-ktx:2.9.0"
+    // 生物识别锁：指纹 / 面容（USE_BIOMETRIC 口径），PIN 仍是兜底。
+    implementation "androidx.biometric:biometric:1.1.0"
 }

@@ -146,7 +146,15 @@ class TypeViewModel(private val repo: BookkeepingRepository) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun add(name: String, type: Int, onDone: () -> Unit) {
-        viewModelScope.launch { repo.addType(name, type); onDone() }
+        add(name, type, "", onDone)
+    }
+
+    fun add(name: String, type: Int, imgName: String, onDone: () -> Unit) {
+        viewModelScope.launch { repo.addType(name, type, imgName = imgName); onDone() }
+    }
+
+    fun setIcon(type: RecordType, imgName: String) {
+        viewModelScope.launch { repo.setTypeIcon(type, imgName) }
     }
 
     fun setEnabled(type: RecordType, enabled: Boolean) {
@@ -168,7 +176,7 @@ class SearchViewModel(private val repo: BookkeepingRepository) : ViewModel() {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val results: StateFlow<List<Record>> = _query.flatMapLatest { q ->
-        if (q.isBlank()) kotlinx.coroutines.flow.flowOf(emptyList()) else repo.searchByRemark(q)
+        if (q.isBlank()) kotlinx.coroutines.flow.flowOf(emptyList()) else repo.searchByRemarkOrAsset(q)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun setQuery(q: String) { _query.value = q }

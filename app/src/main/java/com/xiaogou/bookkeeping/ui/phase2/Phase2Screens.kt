@@ -601,6 +601,8 @@ fun SettingsScreen(
 ) {
     var lockOn by remember { mutableStateOf(settings.lockEnabled) }
     var showNightDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
     var showMonthDialog by remember { mutableStateOf(false) }
     var monthInput by remember { mutableStateOf(monthBeginDay.toString()) }
     val themeLabel = com.xiaogou.bookkeeping.ui.theme.WalkThemeId.fromKey(themeKey).label
@@ -657,6 +659,10 @@ fun SettingsScreen(
                     checked = statisticsPie,
                     onCheckedChange = onStatisticsPieChange,
                 )
+            }
+            item {
+                SettingsRow(icon = { Text("关") }, title = "关于", subtitle = "小狗记账 0.1", onClick = { showAboutDialog = true })
+                SettingsRow(icon = { Text("私") }, title = "隐私政策", subtitle = "数据只存在本机", onClick = { showPrivacyDialog = true })
             }
             item {
                 com.xiaogou.bookkeeping.ui.theme.SettingsSwitchRow(
@@ -744,6 +750,32 @@ fun SettingsScreen(
             },
         )
     }
+    if (showAboutDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            title = { Text("关于小狗记账") },
+            text = { Text("小狗记账 0.1\n记一笔收支、管理多个账户、按分类做月预算、看月度与分类统计；支持周期记账与预算提醒。") },
+            confirmButton = {
+                TextButton(onClick = { showAboutDialog = false }) { Text("知道了") }
+            },
+        )
+    }
+    if (showPrivacyDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showPrivacyDialog = false },
+            title = { Text("隐私政策") },
+            text = {
+                Text(
+                    "小狗记账的账本数据只保存在本机数据库中，不上传到任何服务器；" +
+                        "应用锁 PIN 只以哈希形式存在本机；未来若开启 WebDAV 备份，" +
+                        "备份文件在上传前会先在本机加密。",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showPrivacyDialog = false }) { Text("知道了") }
+            },
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -778,6 +810,15 @@ fun LockScreen(settings: Settings, onUnlocked: () -> Unit) {
     var pin by remember { mutableStateOf("") }
     var failures by remember { mutableStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // 生物识别可用时才显示按钮：设备已录入指纹/面容且系统允许。
+    val biometricAvailable = remember {
+        val manager = androidx.biometric.BiometricManager.from(context)
+        manager.canAuthenticate(
+            androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK,
+        ) == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS
+    }
     Scaffold(topBar = { TopAppBar(title = { Text("应用锁") }) }) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Spacer(modifier = Modifier.height(WalkDimens.lockTopSpace))
@@ -798,6 +839,36 @@ fun LockScreen(settings: Settings, onUnlocked: () -> Unit) {
                     pin = ""
                 }
             }, modifier = Modifier.fillMaxWidth().height(WalkDimens.lockBottomButtonHeight)) { Text("解锁") }
+            if (biometricAvailable) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        val activity = context as? androidx.fragment.app.FragmentActivity
+                        if (activity == null) {
+                            error = "当前界面不支持生物识别，请用 PIN 解锁"
+                            return@OutlinedButton
+                        }
+                        val prompt = androidx.biometric.BiometricPrompt(
+                            activity,
+                            object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                                override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                                    onUnlocked()
+                                }
+                                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                    error = errString.toString()
+                                }
+                            },
+                        )
+                        prompt.authenticate(
+                            androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                                .setTitle("解锁小狗记账")
+                                .setSubtitle("使用指纹或面容解锁")
+                                .setNegativeButtonText("用 PIN 解锁")
+                                .build(),
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("指纹 / 面容解锁") }
+            }
         }
     }
 }
