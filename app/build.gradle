@@ -13,8 +13,8 @@ android {
         applicationId "com.xiaogou.bookkeeping"
         minSdk 21
         targetSdk 34
-        versionCode 37
-        versionName "0.4"
+        versionCode 38
+        versionName "0.5"
     }
 
     // 正式签名：只从环境变量读，不把任何密码、keystore 文件写进仓库。
@@ -57,7 +57,7 @@ android {
     // 旧版 APK 本来就没有 native .so，所以本来就是全架构通用；
     // 这里显式分包是为了以后引入带 native 库的依赖（以及现在就让 CI
     // 产出可按机型分的包），同时保留 universalApk 给未知架构/模拟器兜底。
-    // 注意：分包目前共用 versionCode 37，手动安装时按文件名区分即可；
+    // 注意：分包目前共用 versionCode 38，手动安装时按文件名区分即可；
     // 未来若要以多 APK 形式上架应用商店，再给各 ABI 分配不同的 versionCode。
     splits {
         abi {
